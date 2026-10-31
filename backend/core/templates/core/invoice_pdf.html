@@ -1,0 +1,124 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>{{ invoice.number }}</title>
+<style>
+  @page { size: A4; margin: 16mm 14mm 18mm 14mm;
+          @frame footer { -pdf-frame-content: footer; bottom: 8mm; margin-left: 14mm; margin-right: 14mm; height: 8mm; } }
+  body { font-family: Helvetica; font-size: 9pt; color: #1f2328; }
+  h1 { font-size: 18pt; color: #714B67; margin: 0; }
+  .muted { color: #6b6f76; }
+  .brand { font-size: 14pt; font-weight: bold; color: #714B67; }
+  .status { font-weight: bold; color: #017E84; }
+  .draft { font-weight: bold; color: #b42318; }
+  table { width: 100%; }
+  .meta td { padding: 1pt 0; vertical-align: top; }
+  .lines { margin-top: 10pt; }
+  .lines th { background-color: #f3eef2; color: #4a3044; text-align: left; padding: 5pt 4pt; font-size: 8pt;
+              border-bottom: 1px solid #d6c9d3; }
+  .lines td { padding: 5pt 4pt; border-bottom: 1px solid #eceef0; vertical-align: top; }
+  .num, .lines th.num { text-align: right; }
+  .totals td { padding: 2pt 4pt; }
+  .grand td { font-size: 11pt; font-weight: bold; border-top: 1px solid #714B67; padding-top: 4pt; }
+  .box { border: 1px solid #eceef0; padding: 6pt; }
+  .small { font-size: 7.5pt; }
+</style>
+</head>
+<body>
+<table class="meta">
+  <tr>
+    <td width="55%">
+      <div class="brand">{{ company.name }}</div>
+      <div class="muted">{{ company.address }}</div>
+      <div class="muted">GSTIN {{ company.gstin }} &middot; State {{ company.state }}</div>
+    </td>
+    <td width="45%" class="num">
+      <h1>TAX INVOICE</h1>
+      <div style="font-size: 12pt; font-weight: bold;">{{ invoice.number }}</div>
+      {% if invoice.status == "draft" %}<div class="draft">DRAFT &ndash; not yet issued</div>
+      {% else %}<div class="status">{{ status }}</div>{% endif %}
+    </td>
+  </tr>
+</table>
+
+<table class="meta" style="margin-top: 12pt;">
+  <tr>
+    <td width="55%" class="box">
+      <div class="muted small">BILL TO</div>
+      <div style="font-weight: bold; font-size: 10pt;">{{ customer.name }}</div>
+      {% if customer.address %}<div>{{ customer.address }}</div>{% endif %}
+      {% if customer.state %}<div>State: {{ customer.state }}</div>{% endif %}
+      {% if customer.gstin %}<div>GSTIN: {{ customer.gstin }}</div>{% endif %}
+      {% if customer.email %}<div class="muted">{{ customer.email }}</div>{% endif %}
+    </td>
+    <td width="45%" class="box">
+      <table>
+        <tr><td class="muted">Invoice date</td><td class="num">{{ invoice.invoice_date|date:"d M Y" }}</td></tr>
+        <tr><td class="muted">Due date</td><td class="num">{{ invoice.due_date|date:"d M Y" }}</td></tr>
+        <tr><td class="muted">Service period</td>
+            <td class="num">{{ invoice.period_start|date:"d M Y" }} &ndash; {{ invoice.period_end|date:"d M Y" }}</td></tr>
+        <tr><td class="muted">Subscription</td><td class="num">{{ invoice.subscription.number }}</td></tr>
+        <tr><td class="muted">Place of supply</td>
+            <td class="num">{{ customer.state|default:company.state }}{% if same_state %} (intra-state){% else %} (inter-state){% endif %}</td></tr>
+      </table>
+    </td>
+  </tr>
+</table>
+
+<table class="lines">
+  <thead>
+    <tr>
+      <th width="34%">Description</th>
+      <th width="7%" class="num">Qty</th>
+      <th width="13%" class="num">Unit price</th>
+      <th width="13%" class="num">Discount</th>
+      <th width="20%" class="num">Tax</th>
+      <th width="13%" class="num">Amount</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for line in lines %}
+    <tr>
+      <td>{{ line.description }}{% if line.discount_name %}<div class="muted small">{{ line.discount_name }}</div>{% endif %}</td>
+      <td class="num">{{ line.quantity }}</td>
+      <td class="num">{{ line.unit_price }}</td>
+      <td class="num">{% if line.discount_amount %}-{{ line.discount_amount }}{% else %}&ndash;{% endif %}</td>
+      <td class="num small">{{ line.taxes|default:"&ndash;" }}</td>
+      <td class="num">{{ line.total }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<table style="margin-top: 8pt;">
+  <tr>
+    <td width="55%" style="vertical-align: top;">
+      {% if payments %}
+        <div class="muted small" style="margin-top: 4pt;">PAYMENTS RECEIVED</div>
+        {% for p in payments %}<div>{{ p.date|date:"d M Y" }} &middot; {{ p.method }} &middot; INR {{ p.amount }}</div>{% endfor %}
+      {% endif %}
+    </td>
+    <td width="45%">
+      <table class="totals">
+        <tr><td class="muted">Subtotal</td><td class="num">{{ subtotal }}</td></tr>
+        {% if discount_total %}<tr><td class="muted">Discounts</td><td class="num">-{{ discount_total }}</td></tr>{% endif %}
+        {% for t in tax_summary %}<tr><td class="muted">{{ t.label }}</td><td class="num">{{ t.amount }}</td></tr>{% endfor %}
+        <tr class="grand"><td>Total (INR)</td><td class="num">{{ total }}</td></tr>
+        {% if amount_paid %}
+          <tr><td class="muted">Paid</td><td class="num">-{{ amount_paid }}</td></tr>
+          <tr><td style="font-weight: bold;">Balance due (INR)</td><td class="num" style="font-weight: bold;">{{ balance }}</td></tr>
+        {% endif %}
+      </table>
+    </td>
+  </tr>
+</table>
+
+<p class="muted small" style="margin-top: 14pt;">
+  Amounts in Indian Rupees (INR). Prices exclude tax; GST is computed per line and rounded to the paisa.
+  {% if invoice.status != "paid" and invoice.status != "cancelled" %}Please pay by {{ invoice.due_date|date:"d M Y" }}, quoting {{ invoice.number }}.{% endif %}
+</p>
+
+<div id="footer" class="muted small">{{ company.name }} &middot; {{ invoice.number }} &middot; page <pdf:pagenumber> of <pdf:pagecount></div>
+</body>
+</html>

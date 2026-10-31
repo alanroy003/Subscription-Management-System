@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { api, ApiError } from '../api'
+import { api, ApiError, downloadFile } from '../api'
 import { useAuth } from '../auth'
 import { BrandMark, Icon } from '../components/icons'
 import { useToast } from '../components/toast'
@@ -184,6 +184,18 @@ export function InvoiceDetailPage({ portal = false }: { portal?: boolean }) {
     }
   }
 
+  const downloadPdf = async () => {
+    if (!inv.data) return
+    setBusy('pdf')
+    try {
+      await downloadFile(`/invoices/${id}/pdf`, `${inv.data.number}.pdf`)
+    } catch (e) {
+      toast.error(e)
+    } finally {
+      setBusy(null)
+    }
+  }
+
   if (inv.error)
     return (
       <>
@@ -236,10 +248,15 @@ export function InvoiceDetailPage({ portal = false }: { portal?: boolean }) {
                 {i.sent_at ? 'Send again' : 'Send by email'}
               </Button>
             )}
+            {(i.status !== 'draft' || canAct) && (
+              <Button icon={<Icon.file />} loading={busy === 'pdf'} disabled={!!busy} onClick={downloadPdf}>
+                Download PDF
+              </Button>
+            )}
             {i.status !== 'draft' && (
               <Link to={printUrl} className="btn" target="_blank" rel="noopener">
                 <Icon.printer />
-                {portal ? 'Print / download' : 'Print'}
+                Print
               </Link>
             )}
             {canAct && (i.status === 'draft' || i.status === 'confirmed') && i.payments.length === 0 && (

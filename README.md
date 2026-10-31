@@ -35,10 +35,11 @@ Emails (password reset, invoices) are written to `backend/sent_emails/` unless `
 | Products with variants and price extras (Odoo brand +560), plans with period, min quantity, availability, auto-close / closable / pausable / renewable | Products, Plans pages |
 | Quotation templates with validity → subscription with number, lines, payment terms; Draft → Quotation → Confirmed → Active → Paused / Closed with a timeline | Templates, Subscriptions pages |
 | Billing day: invoices generated from subscriptions, GST (CGST+SGST or IGST by place of supply), discounts applied, never twice (unique subscription + period), catch-up, dry run, failure isolation | Billing page · `python scripts/dev.py billing` |
+| Invoice PDF: server-rendered tax invoice with GST breakdown, downloadable by staff and customers, attached to every invoice email | Invoice page → **Download PDF** · `GET /api/v1/invoices/{id}/pdf` |
 | Discounts: admin only, fixed or %, minimum amount or quantity, dates, usage limit, product or whole-subscription scope | Discounts page |
 | Payments: method, amount, date, note; partial payments; paid / outstanding / overdue | Invoice detail, Payments, Invoices → Overdue |
 | Finance lead: active subscriptions, billed, collected, outstanding, overdue, MRR, ARPU, churn, renewals and 30/60/90-day cash forecast, at-risk customers, filters | Dashboard |
-| Customer portal: own subscriptions and invoices only, print / save PDF, accept quotation, pause / resume / close / renew where the plan allows | Log in as the customer |
+| Customer portal: own subscriptions and invoices only, download PDF / print, accept quotation, pause / resume / close / renew where the plan allows | Log in as the customer |
 
 ## Quality
 

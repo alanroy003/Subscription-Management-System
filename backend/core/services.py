@@ -414,11 +414,15 @@ def send_invoice(invoice: Invoice) -> Invoice:
     body = (
         f"Dear {invoice.customer_snapshot.get('name')},\n\n"
         f"Invoice {invoice.number} for {invoice.currency} {invoice.total} is due on {invoice.due_date}.\n"
-        f"Period: {invoice.period_start} to {invoice.period_end}.\nView and print: {link}\n\n"
+        f"Period: {invoice.period_start} to {invoice.period_end}.\n"
+        f"The invoice is attached as a PDF. View online: {link}\n\n"
         f"{settings.COMPANY['name']}"
     )
+    from .pdf import invoice_filename, render_invoice_pdf
+
     msg = EmailMultiAlternatives(f"Invoice {invoice.number} from {settings.COMPANY['name']}", body,
                                  settings.DEFAULT_FROM_EMAIL, [email])
+    msg.attach(invoice_filename(invoice), render_invoice_pdf(invoice), "application/pdf")
     msg.send(fail_silently=False)
     invoice.sent_at = timezone.now()
     invoice.save(update_fields=["sent_at"])
