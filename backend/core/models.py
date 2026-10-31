@@ -355,6 +355,36 @@ class BillingRun(models.Model):
         ordering = ["-id"]
 
 
+class AuditEvent(models.Model):
+    """Append-only record of a sensitive action (see core/audit.py). Also the outbox for webhooks and alerts:
+    `published_at` is the only column that may change after insert."""
+
+    class Via(models.TextChoices):
+        WEB = "web", "Web app"
+        API_KEY = "api_key", "API key"  # pragma: allowlist secret (enum label, not a key)
+        SYSTEM = "system", "System"
+
+    at = models.DateTimeField(auto_now_add=True, db_index=True)
+    action = models.CharField(max_length=60, db_index=True, help_text="e.g. invoice.confirmed")
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
+    actor_label = models.CharField(max_length=254, blank=True, help_text="Email at the time of the action")
+    via = models.CharField(max_length=10, choices=Via.choices, default=Via.SYSTEM)
+    api_key_prefix = models.CharField(max_length=12, blank=True)
+    object_type = models.CharField(max_length=40, blank=True, db_index=True)
+    object_id = models.CharField(max_length=40, blank=True)
+    object_ref = models.CharField(max_length=100, blank=True, help_text="Human reference, e.g. INV-2026-00012")
+    changes = models.JSONField(default=dict, blank=True)
+    ip = models.GenericIPAddressField(null=True, blank=True)
+    published_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-id"]
+        indexes = [
+            models.Index(fields=["object_type", "object_id"]),
+            models.Index(fields=["published_at", "id"], name="audit_outbox_idx"),
+        ]
+
+
 class IntegrityCheck(models.Model):
     """One reconciliation run (see core/integrity.py)."""
 

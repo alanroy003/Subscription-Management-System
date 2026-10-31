@@ -1,17 +1,20 @@
 from datetime import date
 
-from django.db import connection
+from django.db import connection, transaction
 from django.db.models import DecimalField, ExpressionWrapper, F, Prefetch, Sum, Value
 from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
-from rest_framework import mixins, status, viewsets
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
+from rest_framework import mixins, serializers, status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
-from . import reports, services
+from . import audit, reports, services
 from .models import (
+    AuditEvent,
     BillingRun,
     Customer,
     Discount,
@@ -28,6 +31,7 @@ from .models import (
 from .money import ZERO
 from .permissions import IsAdmin, IsTeam, TeamReadAdminWrite
 from .serializers import (
+    AuditEventSerializer,
     BillingRunSerializer,
     CustomerSerializer,
     DiscountSerializer,
@@ -54,6 +58,8 @@ def _domain(fn):
         raise ValidationError({"detail": str(exc)})
 
 
+@extend_schema(tags=["health"], summary="Health check", responses=inline_serializer(
+    "Health", {"status": serializers.CharField(), "database": serializers.CharField()}))
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def health(request):
@@ -62,6 +68,8 @@ def health(request):
     return Response({"status": "ok", "database": connection.vendor})
 
 
+@extend_schema(tags=["payment-terms"], summary="Payment terms", responses=inline_serializer(
+    "PaymentTerm", {"days": serializers.IntegerField(), "label": serializers.CharField()}, many=True))
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def payment_terms(request):
@@ -69,42 +77,43 @@ def payment_terms(request):
                      {"days": 30, "label": "Net 30"}, {"days": 45, "label": "Net 45"}])
 
 
-class TaxGroupViewSet(viewsets.ModelViewSet):
+class TaxGroupViewSet(audit.AuditedModelViewSetMixin, viewsets.ModelViewSet):
     queryset = TaxGroup.objects.order_by("name")
     serializer_class = TaxGroupSerializer
     permission_classes = [TeamReadAdminWrite]
     search_fields = ["name"]
 
 
-class ProductViewSet(viewsets.ModelViewSet):
+class ProductViewSet(audit.AuditedModelViewSetMixin, viewsets.ModelViewSet):
     queryset = Product.objects.select_related("tax_group").prefetch_related("variants")
     serializer_class = ProductSerializer
     permission_classes = [TeamReadAdminWrite]
     search_fields = ["name", "notes"]
 
 
-class PlanViewSet(viewsets.ModelViewSet):
+class PlanViewSet(audit.AuditedModelViewSetMixin, viewsets.ModelViewSet):
     queryset = Plan.objects.select_related("product")
     serializer_class = PlanSerializer
     permission_classes = [TeamReadAdminWrite]
     search_fields = ["name"]
 
 
-class DiscountViewSet(viewsets.ModelViewSet):
+class DiscountViewSet(audit.AuditedModelViewSetMixin, viewsets.ModelViewSet):
     queryset = Discount.objects.prefetch_related("products").order_by("-id")
     serializer_class = DiscountSerializer
     permission_classes = [TeamReadAdminWrite]
     search_fields = ["name"]
 
 
-class QuotationTemplateViewSet(viewsets.ModelViewSet):
+class QuotationTemplateViewSet(audit.AuditedModelViewSetMixin, viewsets.ModelViewSet):
     queryset = QuotationTemplate.objects.select_related("plan").prefetch_related("lines__product").order_by("name")
     serializer_class = QuotationTemplateSerializer
     permission_classes = [IsTeam]
     search_fields = ["name"]
 
 
-class CustomerViewSet(viewsets.ModelViewSet):
+class CustomerViewSet(audit.AuditedModelViewSetMixin, viewsets.ModelViewSet):
+    queryset = Customer.objects.all()
     serializer_class = CustomerSerializer
     search_fields = ["name", "email", "gstin"]
 
@@ -119,8 +128,9 @@ class CustomerViewSet(viewsets.ModelViewSet):
         return [IsTeam()]
 
 
-class SubscriptionViewSet(viewsets.ModelViewSet):
+class SubscriptionViewSet(audit.AuditedModelViewSetMixin, viewsets.ModelViewSet):
     serializer_class = SubscriptionSerializer
+    queryset = Subscription.objects.all()
     search_fields = ["number", "customer__name", "plan__name"]
     ordering_fields = ["number", "start_date", "next_invoice_date", "created_at"]
 
@@ -155,7 +165,9 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
         return [IsTeam()]
 
     def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
+        with transaction.atomic():
+            sub = serializer.save(created_by=self.request.user)
+            audit.record("subscription.created", sub, changes={"customer": sub.customer_id, "plan": sub.plan_id})
 
     def destroy(self, request, *args, **kwargs):
         sub = self.get_object()
@@ -163,6 +175,10 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
             raise ValidationError({"detail": "Only draft subscriptions can be deleted."})
         return super().destroy(request, *args, **kwargs)
 
+    @extend_schema(summary="Create a quotation from a template", request=inline_serializer("FromTemplate", {
+        "template": serializers.IntegerField(), "customer": serializers.IntegerField(),
+        "start_date": serializers.DateField(required=False),
+        "payment_term_days": serializers.IntegerField(required=False)}), responses={201: SubscriptionSerializer})
     @action(detail=False, methods=["post"], url_path="from-template")
     def from_template(self, request):
         tpl = QuotationTemplate.objects.select_related("plan").filter(pk=request.data.get("template")).first()
@@ -178,9 +194,20 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
         build_lines(sub, [{"product": l.product, "variant": l.variant, "quantity": l.quantity}
                           for l in tpl.lines.select_related("product", "variant")])
         services._log(sub, "", request.user, f"Created from template {tpl.name}")
+        audit.record("subscription.created", sub, changes={"template": tpl.name, "customer": customer.pk})
         _domain(lambda: services.transition(sub, "send_quotation", request.user))
         return Response(self.get_serializer(self.get_queryset().get(pk=sub.pk)).data, status=status.HTTP_201_CREATED)
 
+    @extend_schema(
+        summary="Move a subscription through its lifecycle",
+        description="Allowed actions depend on the status, the plan options and the caller's role; see "
+                    "`available_actions` on the subscription.",
+        request=inline_serializer("Transition", {
+            "action": serializers.ChoiceField(
+                choices=["send_quotation", "confirm", "activate", "pause", "resume", "close", "renew"]),
+            "note": serializers.CharField(required=False)}),
+        responses={200: SubscriptionSerializer},
+    )
     @action(detail=True, methods=["post"])
     def transition(self, request, pk=None):
         # Ownership check without the detail prefetches; customers only reach their own subscriptions.
@@ -192,6 +219,7 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
 
 
 class InvoiceViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
+    queryset = Invoice.objects.all()
     search_fields = ["number", "customer__name", "subscription__number"]
     ordering_fields = ["invoice_date", "due_date", "total", "number"]
 
@@ -236,6 +264,11 @@ class InvoiceViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.
     def send(self, request, pk=None):
         return self._act(services.send_invoice)
 
+    @extend_schema(
+        summary="Confirm several draft invoices",
+        request=inline_serializer("BulkConfirm", {"ids": serializers.ListField(child=serializers.IntegerField())}),
+        responses=inline_serializer("BulkConfirmed", {"confirmed": serializers.IntegerField()}),
+    )
     @action(detail=False, methods=["post"], url_path="bulk-confirm", permission_classes=[IsTeam])
     def bulk_confirm(self, request):
         done = 0
@@ -248,6 +281,7 @@ class InvoiceViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.
 class PaymentViewSet(
     mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.CreateModelMixin, viewsets.GenericViewSet
 ):
+    queryset = Payment.objects.all()
     serializer_class = PaymentSerializer
     search_fields = ["invoice__number", "invoice__customer__name", "note"]
 
@@ -277,6 +311,9 @@ class BillingRunViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewse
     serializer_class = BillingRunSerializer
     permission_classes = [IsTeam]
 
+    @extend_schema(summary="Run billing (or a dry run)", request=inline_serializer("BillingRunRequest", {
+        "as_of": serializers.DateField(required=False), "dry_run": serializers.BooleanField(default=False)}),
+        responses=BillingRunSerializer)
     @action(detail=False, methods=["post"])
     def run(self, request):
         as_of = request.data.get("as_of") or None
@@ -286,6 +323,13 @@ class BillingRunViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewse
         return Response(BillingRunSerializer(run).data)
 
 
+@extend_schema(
+    tags=["reports"], summary="Finance summary",
+    description="Active subscriptions, billed, collected, outstanding and overdue amounts, MRR, ARPU, churn, "
+                "monthly revenue series, renewals and 30/60/90-day cash forecast, at-risk customers.",
+    parameters=[OpenApiParameter("date_from", OpenApiTypes.DATE), OpenApiParameter("date_to", OpenApiTypes.DATE)],
+    responses=OpenApiTypes.OBJECT,
+)
 @api_view(["GET"])
 @permission_classes([IsTeam])
 def report_summary(request):
@@ -302,8 +346,35 @@ class IntegrityCheckViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     serializer_class = IntegrityCheckSerializer
     permission_classes = [IsTeam]
 
+    @extend_schema(summary="Run a reconciliation check now", request=None, responses=IntegrityCheckSerializer)
     @action(detail=False, methods=["post"], permission_classes=[IsAdmin])
     def run(self, request):
         from .integrity import run_check
 
-        return Response(IntegrityCheckSerializer(run_check(notify=False, user=request.user)).data)
+        check = run_check(notify=False, user=request.user)
+        audit.record("integrity.check", check, ref=f"{check.issue_count} issue(s)")
+        return Response(IntegrityCheckSerializer(check).data)
+
+
+class AuditEventViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
+    """Read-only audit log for admins. Filters: `action` (prefix, e.g. `invoice.`), `actor`, `object_type`,
+    `object_id`, `via`, `date_from`, `date_to`; `search` matches the reference, actor email and action."""
+
+    queryset = AuditEvent.objects.all()
+    serializer_class = AuditEventSerializer
+    permission_classes = [IsAdmin]
+    search_fields = ["object_ref", "actor_label", "action"]
+
+    def get_queryset(self):
+        qs = AuditEvent.objects.all()
+        p = self.request.query_params
+        if p.get("action"):
+            qs = qs.filter(action__startswith=p["action"])
+        for key in ("actor", "object_type", "object_id", "via"):
+            if p.get(key):
+                qs = qs.filter(**{key: p[key]})
+        if p.get("date_from"):
+            qs = qs.filter(at__date__gte=p["date_from"])
+        if p.get("date_to"):
+            qs = qs.filter(at__date__lte=p["date_to"])
+        return qs

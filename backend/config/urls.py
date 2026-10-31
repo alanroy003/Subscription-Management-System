@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.urls import include, path
-from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
+from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 from rest_framework.routers import DefaultRouter
 
 from accounts import views as auth_views
@@ -20,6 +20,7 @@ router.register("invoices", views.InvoiceViewSet, basename="invoice")
 router.register("payments", views.PaymentViewSet, basename="payment")
 router.register("billing/runs", views.BillingRunViewSet)
 router.register("integrity/checks", views.IntegrityCheckViewSet)
+router.register("audit-events", views.AuditEventViewSet, basename="audit-event")
 
 api = [
     path("health", views.health),
@@ -33,7 +34,8 @@ api = [
     path("auth/password-reset", auth_views.password_reset),
     path("auth/password-reset/confirm", auth_views.password_reset_confirm),
     path("schema", SpectacularAPIView.as_view(), name="schema"),
-    path("docs", SpectacularSwaggerView.as_view(url_name="schema")),
+    path("docs", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger"),
+    path("redoc", SpectacularRedocView.as_view(url_name="schema"), name="redoc"),
     path("", include(router.urls)),
 ]
 

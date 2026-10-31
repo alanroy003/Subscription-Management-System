@@ -6,6 +6,7 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
+from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import mixins, serializers, status, viewsets
 from rest_framework.authtoken.models import Token
 from rest_framework.decorators import action, api_view, permission_classes, throttle_classes
@@ -13,6 +14,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
 
+from core import audit
 from core.models import Customer
 from core.permissions import IsAdmin
 
@@ -48,6 +50,51 @@ def _check_email(email: str) -> str:
     return email
 
 
+class MeSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    email = serializers.EmailField()
+    name = serializers.CharField()
+    role = serializers.ChoiceField(choices=User.Role.choices)
+    customer_id = serializers.IntegerField(allow_null=True)
+
+
+class AuthResponseSerializer(serializers.Serializer):
+    token = serializers.CharField(help_text="Send as `Authorization: Token <token>`")
+    user = MeSerializer()
+
+
+class SignupSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    password = serializers.CharField(help_text="More than 8 characters with upper, lower and a special character")
+    name = serializers.CharField(required=False, help_text="Company or person name; defaults to the email name")
+
+
+class LoginSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    password = serializers.CharField()
+
+
+class EmailSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+
+class ResetConfirmSerializer(serializers.Serializer):
+    uid = serializers.CharField()
+    token = serializers.CharField()
+    password = serializers.CharField()
+
+
+class DetailSerializer(serializers.Serializer):
+    detail = serializers.CharField()
+
+
+AUTH = ["auth"]
+
+
+@extend_schema(
+    tags=AUTH, summary="Sign up as a customer", request=SignupSerializer,
+    responses={201: AuthResponseSerializer, 400: OpenApiResponse(description="Invalid email or weak password")},
+)
 @api_view(["POST"])
 @permission_classes([AllowAny])
 @throttle_classes([AuthThrottle])
@@ -65,33 +112,43 @@ def signup(request):
             customer.save(update_fields=["user"])
         else:
             Customer.objects.create(name=name, email=email, user=user)
+        audit.record("auth.signup", user, actor=user)
     token, _ = Token.objects.get_or_create(user=user)
     return Response({"token": token.key, "user": user_payload(user)}, status=status.HTTP_201_CREATED)
 
 
+@extend_schema(tags=AUTH, summary="Sign in and get a token", request=LoginSerializer,
+               responses={200: AuthResponseSerializer, 400: DetailSerializer})
 @api_view(["POST"])
 @permission_classes([AllowAny])
 @throttle_classes([AuthThrottle])
 def login(request):
-    user = authenticate(request, email=(request.data.get("email") or "").strip().lower(),
-                        password=request.data.get("password", ""))
+    email = (request.data.get("email") or "").strip().lower()
+    user = authenticate(request, email=email, password=request.data.get("password", ""))
     if not user:
+        audit.record("auth.login_failed", object_type="user", ref=email[:100])
         return Response({"detail": "Invalid email or password."}, status=status.HTTP_400_BAD_REQUEST)
     token, _ = Token.objects.get_or_create(user=user)
+    audit.record("auth.login", user, actor=user)
     return Response({"token": token.key, "user": user_payload(user)})
 
 
+@extend_schema(tags=AUTH, summary="Sign out (invalidates the token)", request=None, responses={200: DetailSerializer})
 @api_view(["POST"])
 def logout(request):
     Token.objects.filter(user=request.user).delete()
+    audit.record("auth.logout", request.user)
     return Response({"detail": "Logged out."})
 
 
+@extend_schema(tags=AUTH, summary="Who am I", responses={200: MeSerializer})
 @api_view(["GET"])
 def me(request):
     return Response(user_payload(request.user))
 
 
+@extend_schema(tags=AUTH, summary="Email a password reset link", request=EmailSerializer,
+               responses={200: DetailSerializer})
 @api_view(["POST"])
 @permission_classes([AllowAny])
 @throttle_classes([AuthThrottle])
@@ -107,9 +164,12 @@ def password_reset(request):
                   f"Hello {user.name or user.email},\n\nReset your password here: {link}\n\n"
                   "If you did not ask for this, ignore this email.",
                   settings.DEFAULT_FROM_EMAIL, [user.email])
+        audit.record("auth.password_reset_requested", user, actor=user)
     return Response({"detail": "If the email is registered, a reset link has been sent."})
 
 
+@extend_schema(tags=AUTH, summary="Set a new password from a reset link", request=ResetConfirmSerializer,
+               responses={200: DetailSerializer, 400: DetailSerializer})
 @api_view(["POST"])
 @permission_classes([AllowAny])
 @throttle_classes([AuthThrottle])
@@ -122,9 +182,11 @@ def password_reset_confirm(request):
         return Response({"detail": "This reset link is invalid or has expired."}, status=status.HTTP_400_BAD_REQUEST)
     password = request.data.get("password", "")
     _check_password(password)
-    user.set_password(password)
-    user.save()
-    Token.objects.filter(user=user).delete()
+    with transaction.atomic():
+        user.set_password(password)
+        user.save()
+        Token.objects.filter(user=user).delete()
+        audit.record("auth.password_reset", user, actor=user)
     return Response({"detail": "Password updated. You can sign in now."})
 
 
@@ -170,13 +232,15 @@ class UserSerializer(serializers.ModelSerializer):
         return fields
 
 
-class UserViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, mixins.UpdateModelMixin, viewsets.GenericViewSet):
+class UserViewSet(audit.AuditedModelViewSetMixin, mixins.ListModelMixin, mixins.CreateModelMixin,
+                  mixins.UpdateModelMixin, viewsets.GenericViewSet):
     """Only the admin can add internal staff."""
 
     queryset = User.objects.order_by("role", "email")
     serializer_class = UserSerializer
     permission_classes = [IsAuthenticated, IsAdmin]
     search_fields = ["email", "name"]
+    audit_name = "user"
 
 
 class ApiKeySerializer(serializers.ModelSerializer):
@@ -198,13 +262,17 @@ class ApiKeyViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, viewsets.Gen
     def create(self, request, *args, **kwargs):
         ser = self.get_serializer(data=request.data)
         ser.is_valid(raise_exception=True)
-        key, raw = ApiKey.issue(ser.validated_data["name"], sorted(set(ser.validated_data["scopes"])), request.user)
+        with transaction.atomic():
+            key, raw = ApiKey.issue(ser.validated_data["name"], sorted(set(ser.validated_data["scopes"])), request.user)
+            audit.record("api_key.created", key, ref=f"{key.name} (bl_{key.prefix})", changes={"scopes": key.scopes})
         return Response({**ApiKeySerializer(key).data, "key": raw}, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["post"])
     def revoke(self, request, pk=None):
         key = self.get_object()
         if not key.revoked_at:
-            key.revoked_at = timezone.now()
-            key.save(update_fields=["revoked_at"])
+            with transaction.atomic():
+                key.revoked_at = timezone.now()
+                key.save(update_fields=["revoked_at"])
+                audit.record("api_key.revoked", key, ref=f"{key.name} (bl_{key.prefix})")
         return Response(ApiKeySerializer(key).data)

@@ -6,6 +6,8 @@ import { Button } from './ui'
 
 interface NavItem {
   to: string
+  /** Opens outside the app (e.g. the API docs served by the backend). */
+  external?: boolean
   label: string
   icon: ReactNode
   adminOnly?: boolean
@@ -50,6 +52,8 @@ const consoleNav: NavGroup[] = [
     items: [
       { to: '/users', label: 'Users', icon: <Icon.shield />, adminOnly: true },
       { to: '/api-keys', label: 'API keys', icon: <Icon.loop />, adminOnly: true },
+      { to: '/audit-log', label: 'Audit log', icon: <Icon.file />, adminOnly: true },
+      { to: '/api/docs', label: 'API docs', icon: <Icon.template />, adminOnly: true, external: true },
     ],
   },
 ]
@@ -112,10 +116,17 @@ export function Shell() {
             <div key={g.label}>
               <div className="nav-section">{g.label}</div>
               {g.items.map((i) => (
-                <NavLink key={i.to} to={i.to} end={i.to === '/portal'} className="nav-link">
-                  {i.icon}
-                  {i.label}
-                </NavLink>
+                i.external ? (
+                  <a key={i.to} href={i.to} target="_blank" rel="noreferrer" className="nav-link">
+                    {i.icon}
+                    {i.label}
+                  </a>
+                ) : (
+                  <NavLink key={i.to} to={i.to} end={i.to === '/portal'} className="nav-link">
+                    {i.icon}
+                    {i.label}
+                  </NavLink>
+                )
               ))}
             </div>
           ))}

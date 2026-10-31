@@ -13,6 +13,7 @@ from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
 
+from . import audit
 from .models import (
     BillingRun,
     Customer,
@@ -147,6 +148,7 @@ def transition(sub: Subscription, action: str, user, note: str = "") -> Subscrip
                                             note="Started automatically"))
         sub.save()
         SubscriptionEvent.objects.bulk_create(events)
+        audit.record(f"subscription.{action}", sub, changes={"status": [old, sub.status], "note": note})
         if sub.status == S.ACTIVE and action in ("confirm", "activate", "renew"):
             bill_subscription(sub.pk, today, locked=sub)  # first invoice is billed in advance on activation
     return sub
@@ -306,11 +308,15 @@ def bill_subscription(sub_id: int, as_of: date, catalog: tuple | None = None, as
                 else:
                     inv.number = "(preview)"
                 items.append(BillItem(sub.number, inv.period_start, inv.total, "created", invoice_number=inv.number))
+                if assign_numbers:  # outbox event; a dry run never commits anyway
+                    audit.record("invoice.created", inv, changes={"subscription": sub.number, "total": inv.total,
+                                                                  "period_start": inv.period_start})
         if sub.status in (S.ACTIVE, S.PAUSED) and sub.plan.auto_close and sub.expiry_date and sub.expiry_date <= as_of:
             old = sub.status
             sub.status, sub.closed_at = S.CLOSED, sub.expiry_date
             sub.save()
             _log(sub, old, None, "Closed automatically at expiry")
+            audit.record("subscription.closed_at_expiry", sub, changes={"status": [old, sub.status]})
             items.append(BillItem(sub.number, sub.expiry_date, ZERO, "closed"))
     return items
 
@@ -352,6 +358,8 @@ def run_billing(as_of: date | None = None, dry_run: bool = False, user=None) -> 
         skipped=0, failed=sum(1 for i in items if i.status == "failed"),
         items=[i.as_dict() for i in items], finished_at=timezone.now(),
     )
+    audit.record("billing.dry_run" if dry_run else "billing.run", run, ref=str(as_of),
+                 changes={"created": run.created, "failed": run.failed}, actor=run.triggered_by)
     return run
 
 
@@ -375,6 +383,7 @@ def confirm_invoice(invoice: Invoice) -> Invoice:
             raise DomainError("Only draft invoices can be confirmed.")
         invoice.status = Invoice.Status.CONFIRMED
         invoice.save(update_fields=["status"])
+        audit.record("invoice.confirmed", invoice, changes={"total": invoice.total})
     return invoice
 
 
@@ -391,6 +400,7 @@ def cancel_invoice(invoice: Invoice) -> Invoice:
         Discount.objects.filter(pk__in=invoice.applied_discounts, used_count__gt=0).update(
             used_count=F("used_count") - 1
         )
+        audit.record("invoice.cancelled", invoice, changes={"total": invoice.total})
     return invoice
 
 
@@ -412,6 +422,7 @@ def send_invoice(invoice: Invoice) -> Invoice:
     msg.send(fail_silently=False)
     invoice.sent_at = timezone.now()
     invoice.save(update_fields=["sent_at"])
+    audit.record("invoice.sent", invoice, changes={"to": email})
     return invoice
 
 
@@ -432,4 +443,6 @@ def record_payment(invoice: Invoice, method: str, amount: Decimal, on: date, not
         if invoice.balance == 0:
             invoice.status = Invoice.Status.PAID
         invoice.save(update_fields=["amount_paid", "status"])
+        audit.record("payment.recorded", payment, ref=invoice.number,
+                     changes={"amount": amount, "method": method, "invoice_status": invoice.status}, actor=user)
     return payment

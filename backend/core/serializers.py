@@ -2,6 +2,7 @@ from django.db import transaction
 from rest_framework import serializers
 
 from .models import (
+    AuditEvent,
     BillingRun,
     Customer,
     Discount,
@@ -92,7 +93,7 @@ class PlanSerializer(serializers.ModelSerializer):
         fields = ["id", "name", "product", "product_name", "price", "billing_period", "min_quantity", "available_from",
                   "available_to", "auto_close", "closable", "pausable", "renewable", "is_available"]
 
-    def get_is_available(self, plan):
+    def get_is_available(self, plan) -> bool:
         from datetime import date
         return plan.is_available_on(date.today())
 
@@ -138,7 +139,7 @@ class CustomerSerializer(serializers.ModelSerializer):
         model = Customer
         fields = ["id", "name", "email", "phone", "address", "state", "gstin", "has_login"]
 
-    def get_has_login(self, c):
+    def get_has_login(self, c) -> bool:
         return c.user_id is not None
 
 
@@ -192,7 +193,7 @@ class SubscriptionLineSerializer(serializers.ModelSerializer):
         fields = ["id", "product", "product_name", "variant", "variant_label", "description", "quantity",
                   "unit_price", "tax_group", "subtotal"]
 
-    def get_variant_label(self, line):
+    def get_variant_label(self, line) -> str:
         return line.variant.label if line.variant else ""
 
     def validate(self, attrs):
@@ -211,7 +212,7 @@ class EventSerializer(serializers.ModelSerializer):
         model = SubscriptionEvent
         fields = ["at", "from_status", "to_status", "user_name", "note"]
 
-    def get_user_name(self, e):
+    def get_user_name(self, e) -> str:
         return (e.user.name or e.user.email) if e.user else "System"
 
 
@@ -246,12 +247,12 @@ class SubscriptionSerializer(serializers.ModelSerializer):
                   "notes", "lines", "subtotal", "recurring_total", "available_actions", "events", "created_at"]
         read_only_fields = ["number", "status", "next_invoice_date", "quotation_valid_until"]
 
-    def get_subtotal(self, sub):
+    def get_subtotal(self, sub) -> str:
         return str(sum((l.subtotal for l in sub.lines.all()), ZERO))
 
     get_recurring_total = get_subtotal
 
-    def get_available_actions(self, sub):
+    def get_available_actions(self, sub) -> list[str]:
         request = self.context.get("request")
         return available_actions(sub, request.user) if request else []
 
@@ -320,7 +321,7 @@ class InvoiceSerializer(InvoiceListSerializer):
     class Meta(InvoiceListSerializer.Meta):
         fields = InvoiceListSerializer.Meta.fields + ["customer_snapshot", "lines", "payments", "company"]
 
-    def get_company(self, _):
+    def get_company(self, _) -> dict:
         from django.conf import settings
         return settings.COMPANY
 
@@ -346,7 +347,7 @@ class SubscriptionListSerializer(serializers.ModelSerializer):
                   "start_date", "expiry_date", "next_invoice_date", "payment_term_days", "quotation_valid_until",
                   "recurring_total", "available_actions", "created_at"]
 
-    def get_available_actions(self, sub):
+    def get_available_actions(self, sub) -> list[str]:
         request = self.context.get("request")
         return available_actions(sub, request.user) if request else []
 
@@ -355,3 +356,10 @@ class IntegrityCheckSerializer(serializers.ModelSerializer):
     class Meta:
         model = IntegrityCheck
         fields = ["id", "started_at", "finished_at", "issue_count", "issues", "counts"]
+
+
+class AuditEventSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AuditEvent
+        fields = ["id", "at", "action", "actor", "actor_label", "via", "api_key_prefix", "object_type", "object_id",
+                  "object_ref", "changes", "ip"]

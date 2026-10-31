@@ -49,6 +49,10 @@ jobs:
         run: python manage.py makemigrations --check --dry-run
         env:
           APP_TESTING: "1"
+      - name: API docs schema is valid (no warnings)
+        run: python manage.py spectacular --validate --fail-on-warn --file /dev/null
+        env:
+          APP_TESTING: "1"
 
   backend-postgres:
     runs-on: ubuntu-latest

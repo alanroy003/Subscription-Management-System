@@ -5,6 +5,7 @@ import { Shell } from './components/Shell'
 import { EmptyState, Skeleton } from './components/ui'
 import { ForgotPasswordPage, LoginPage, ResetPasswordPage, SignupPage } from './pages/auth/AuthPages'
 import { ApiKeysPage } from './pages/ApiKeys'
+import { AuditLogPage } from './pages/AuditLog'
 import { BillingPage } from './pages/Billing'
 import {
   CustomersPage,
@@ -105,6 +106,14 @@ export default function App() {
           element={
             <RequireRole roles={[...ADMIN]}>
               <UsersPage />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/audit-log"
+          element={
+            <RequireRole roles={[...ADMIN]}>
+              <AuditLogPage />
             </RequireRole>
           }
         />

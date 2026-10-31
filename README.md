@@ -57,9 +57,15 @@ python scripts/dev.py perf       # times every main endpoint against the configu
   2 to 10 s because every statement crosses the ocean; a Supabase project in `ap-south-1` (Mumbai) would cut that ~5x.
 - The database itself enforces the money rules (CHECK constraints) and freezes issued invoices and payments (triggers);
   a nightly `python backend/manage.py reconcile` re-adds every total and alerts admins on any mismatch.
+- Every sensitive action (sign-ins, staff and API key changes, catalog edits, invoices, payments, billing runs) is
+  written to an append-only audit log in the same transaction; admins browse it on *Settings → Audit log*.
 - RLS is enabled on all public tables so the Supabase Data API cannot read business data with the publishable key.
 
 ## Public API
+
+Full reference: **Swagger** at http://127.0.0.1:8000/api/docs and **ReDoc** at http://127.0.0.1:8000/api/redoc (also
+linked as *API docs* in the admin sidebar), with a usage guide, every endpoint grouped by area, request and response
+schemas, and an Authorize button for both a login token and an API key.
 
 Admins create keys on **API keys** (hashed at rest, scoped `read` / `write`, revocable, shown once). Call any endpoint
 under `/api/v1/` with `X-API-Key: <key>`; add `Idempotency-Key: <unique id>` to POSTs so retries replay the first

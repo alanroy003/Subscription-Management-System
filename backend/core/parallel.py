@@ -5,6 +5,7 @@ Running them on pooled connections in parallel turns that into one or two. SQLit
 
 Work also runs in-line when the caller is inside a transaction: other connections cannot see its uncommitted rows.
 """
+import contextvars
 from concurrent.futures import ThreadPoolExecutor
 
 from django.db import connection, connections
@@ -17,9 +18,11 @@ def _can_parallelise() -> bool:
 
 
 def _wrap(fn):
+    ctx = contextvars.copy_context()  # carry the request context (e.g. audit actor) into the worker thread
+
     def run():
         try:
-            return fn()
+            return ctx.copy().run(fn)
         finally:
             connections.close_all()  # return this thread's connection to the pool
 
@@ -45,9 +48,11 @@ def map_parallel(fn, items, parallel: bool | None = None) -> list:
 
 
 def _wrap_arg(fn):
+    ctx = contextvars.copy_context()
+
     def run(item):
         try:
-            return fn(item)
+            return ctx.copy().run(fn, item)
         finally:
             connections.close_all()
 

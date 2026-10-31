@@ -52,6 +52,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "core.audit.AuditContextMiddleware",
     "accounts.apikeys.IdempotencyMiddleware",
 ]
 
@@ -112,15 +113,24 @@ REST_FRAMEWORK = {
     "COERCE_DECIMAL_TO_STRING": True,
     "EXCEPTION_HANDLER": "core.exceptions.exception_handler",
 }
+
+from config import schema as _api_schema  # noqa: E402  (plain module, safe to import from settings)
+
 SPECTACULAR_SETTINGS = {
     "TITLE": "Brightloop Subscription Management API",
     "VERSION": "1.0.0",
-    "DESCRIPTION": (
-        "Products, plans, subscriptions, recurring invoices, payments and finance reports.\n\n"
-        "**Public API:** send `X-API-Key: <key>` (created by an admin on the API keys page). Keys are scoped "
-        "`read` and/or `write`, rate limited (120 requests/min by default) and revocable. Versioned base path: "
-        "`/api/v1/`. Send an `Idempotency-Key` header on POST to make retries safe: the first response is replayed."
-    ),
+    "DESCRIPTION": _api_schema.DESCRIPTION,
+    "TAGS": _api_schema.TAGS,
+    "SCHEMA_PATH_PREFIX": r"/api/v1",
+    "PREPROCESSING_HOOKS": ["config.schema.only_versioned_paths"],
+    "COMPONENT_SPLIT_REQUEST": True,
+    "ENUM_NAME_OVERRIDES": {
+        "SubscriptionStatusEnum": "core.models.Subscription.Status",
+        "InvoiceStatusEnum": "core.models.Invoice.Status",
+    },
+    "SWAGGER_UI_SETTINGS": {"persistAuthorization": True, "deepLinking": True, "filter": True,
+                            "displayRequestDuration": True, "docExpansion": "none"},
+    "SERVE_INCLUDE_SCHEMA": False,
 }
 
 # Email: SMTP when EMAIL_HOST is set (e.g. Mailpit), otherwise files in backend/sent_emails/.
