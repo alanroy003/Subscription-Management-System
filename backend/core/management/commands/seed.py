@@ -71,7 +71,16 @@ class Command(BaseCommand):
             catalog = self.catalog()
             customers = self.customers(opts["customers"] or max(60, opts["subs"] // 3))
             self.subscriptions(catalog, customers, opts["subs"])
+        self.trials(customers)
         self.stdout.write(self.style.SUCCESS("Seed complete."))
+
+    def trials(self, customers):
+        """Two customers already on the free trial; the demo customer is left eligible to start one."""
+        from core.trials import start_trial
+
+        for customer in customers[-2:]:
+            start_trial(customer)
+        self.stdout.write("Started 2 demo free trials.")
 
     # ------------------------------------------------------------------ setup
     def reset(self):
@@ -127,6 +136,9 @@ class Command(BaseCommand):
                                            auto_close=True, renewable=False, closable=True),
             "legacy": Plan.objects.create(name="Legacy CRM 2024", product=crm, price=D(900), billing_period="monthly",
                                           available_to=date(2024, 12, 31)),
+            "trial": Plan.objects.create(name="Free Trial (30 days)", product=crm, price=D(0), billing_period="monthly",
+                                         is_trial=True, trial_days=30, auto_close=True, renewable=False,
+                                         pausable=False, closable=True),
         }
         volume = Discount.objects.create(name="Volume 10% (5+ seats)", kind="percent", value=D(10), min_quantity=5,
                                          usage_limit=5000, scope="products")

@@ -33,6 +33,7 @@ export const actionMeta: Record<
     confirm: 'Closing ends the subscription. No further invoices will be created.',
   },
   renew: { label: 'Renew', variant: 'default', confirm: 'Renewing creates a new subscription for the next term.' },
+  convert: { label: 'Convert to paid plan', portalLabel: 'Choose a paid plan', variant: 'primary' },
 }
 
 /* Lifecycle stepper: draft → quotation → confirmed → active → closed, paused branches off active. */

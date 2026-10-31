@@ -28,6 +28,8 @@ api = [
     path("payment-terms", views.payment_terms),
     path("billing/run", views.BillingRunViewSet.as_view({"post": "run"})),
     path("reports/summary", views.report_summary),
+    path("trial", views.trial_status),
+    path("trial/start", views.start_trial_view),
     path("auth/signup", auth_views.signup),
     path("auth/login", auth_views.login),
     path("auth/logout", auth_views.logout),

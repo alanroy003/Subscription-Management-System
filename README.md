@@ -19,7 +19,7 @@ python scripts/dev.py up         # API http://127.0.0.1:8000/api/docs  ·  App h
 
 `.env` lives in the repo root and is never committed; copy `.env.example` (names only) to start. Every manual
 commit runs a local secret scan (detect-secrets) that blocks keys and `.env` files. Required: `DATABASE_URL` (Supabase **session pooler**,
-port 5432) and `DJANGO_SECRET_KEY`. Optional: `DEMO_PASSWORD`, `EMAIL_HOST`/`EMAIL_PORT` (e.g. Mailpit), `COMPANY_STATE`.
+port 5432) and `DJANGO_SECRET_KEY`. Optional: `DEMO_PASSWORD`, `EMAIL_HOST`/`EMAIL_PORT` (e.g. Mailpit), `COMPANY_STATE`, `TRIAL_ON_SIGNUP` (default true).
 Without `DATABASE_URL` the backend falls back to a local SQLite file.
 
 **Demo logins** (local seed data): `admin@brightloop.test`, `staff@brightloop.test`, `customer@brightloop.test`, all
@@ -37,6 +37,7 @@ Emails (password reset, invoices) are written to `backend/sent_emails/` unless `
 | Billing day: invoices generated from subscriptions, GST (CGST+SGST or IGST by place of supply), discounts applied, never twice (unique subscription + period), catch-up, dry run, failure isolation | Billing page · `python scripts/dev.py billing` |
 | Invoice PDF: server-rendered tax invoice with GST breakdown, downloadable by staff and customers, attached to every invoice email | Invoice page → **Download PDF** · `GET /api/v1/invoices/{id}/pdf` |
 | Renewal reminders: emails 30, 7 and 1 day before expiry, each sent once, shown on the subscription timeline | Dashboard → **Upcoming renewals** → Send due reminders · runs daily · `python backend/manage.py send_renewal_reminders` |
+| Free trial: a 0-rupee trial plan, started on sign-up or with one click, one per customer, closes itself, converts to a paid plan that starts when the trial ends | Plans → *Free trial plan* toggle · portal banner **Start free trial** / **Choose a plan** · subscription → **Convert to paid plan** |
 | Discounts: admin only, fixed or %, minimum amount or quantity, dates, usage limit, product or whole-subscription scope | Discounts page |
 | Payments: method, amount, date, note; partial payments; paid / outstanding / overdue | Invoice detail, Payments, Invoices → Overdue |
 | Finance lead: active subscriptions, billed, collected, outstanding, overdue, MRR, ARPU, churn, renewals and 30/60/90-day cash forecast, at-risk customers, filters | Dashboard |

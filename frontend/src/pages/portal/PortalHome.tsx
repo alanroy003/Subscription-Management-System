@@ -10,6 +10,7 @@ import { useAsync } from '../../hooks'
 import type { Invoice, SubAction, Subscription } from '../../types'
 import { InvoicePill } from '../Invoices'
 import { actionMeta } from '../subscriptionParts'
+import { ConvertTrialModal, TrialBanner } from '../Trial'
 
 export function PortalHomePage() {
   const { user } = useAuth()
@@ -19,6 +20,7 @@ export function PortalHomePage() {
   const invs = useAsync(() => api.list<Invoice>('/invoices', { page_size: 10 }), [])
   const [pending, setPending] = useState<{ sub: Subscription; action: SubAction } | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
+  const [converting, setConverting] = useState<number | null>(null)
 
   const list = subs.data?.results ?? []
   const active = list.filter((s) => s.status === 'active')
@@ -42,6 +44,15 @@ export function PortalHomePage() {
 
   return (
     <>
+      <TrialBanner
+        onChanged={() => {
+          subs.reload()
+          invs.reload()
+        }}
+      />
+      {converting !== null && (
+        <ConvertTrialModal subscriptionId={converting} open onClose={() => setConverting(null)} portal />
+      )}
       <section className="portal-hero">
         <div style={{ flex: '1 1 260px' }}>
           <div className="stat-label">Welcome back</div>
@@ -125,7 +136,13 @@ export function PortalHomePage() {
                           variant={m?.variant ?? 'default'}
                           loading={busy === `${s.id}:${a}`}
                           disabled={!!busy}
-                          onClick={() => (m?.confirm ? setPending({ sub: s, action: a }) : run(s, a))}
+                          onClick={() =>
+                            a === 'convert'
+                              ? setConverting(s.id)
+                              : m?.confirm
+                                ? setPending({ sub: s, action: a })
+                                : run(s, a)
+                          }
                         >
                           {m?.portalLabel ?? m?.label ?? a}
                         </Button>

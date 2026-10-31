@@ -32,6 +32,7 @@ import {
   usePaymentTerms,
   type SubHeaderDraft,
 } from './subscriptionParts'
+import { ConvertTrialModal } from './Trial'
 
 const TABS: { key: '' | SubStatus; label: string }[] = [
   { key: '', label: 'All' },
@@ -139,6 +140,7 @@ export function SubscriptionDetailPage({ portal = false }: { portal?: boolean })
   const terms = usePaymentTerms()
   const [pending, setPending] = useState<SubAction | null>(null)
   const [busyAction, setBusyAction] = useState<SubAction | null>(null)
+  const [converting, setConverting] = useState(false)
   const [head, setHead] = useState<SubHeaderDraft | null>(null)
   const [lines, setLines] = useState<SubLine[]>([])
   const [errors, setErrors] = useState<Record<string, string[]>>({})
@@ -254,7 +256,9 @@ export function SubscriptionDetailPage({ portal = false }: { portal?: boolean })
               variant={m.variant}
               loading={busyAction === a}
               disabled={!!busyAction}
-              onClick={() => (m.confirm || a === 'close' ? setPending(a) : runAction(a))}
+              onClick={() =>
+                a === 'convert' ? setConverting(true) : m.confirm || a === 'close' ? setPending(a) : runAction(a)
+              }
             >
               {portal && m.portalLabel ? m.portalLabel : m.label}
             </Button>
@@ -265,6 +269,23 @@ export function SubscriptionDetailPage({ portal = false }: { portal?: boolean })
       <Card pad={false} className="fade-in">
         <Lifecycle status={s.status} />
       </Card>
+
+      {s.is_trial && (
+        <div className="alert alert-info" style={{ marginTop: 16 }}>
+          <strong>Free trial</strong>
+          {s.expiry_date ? ` until ${date(s.expiry_date)}` : ''}; its invoices are 0 and settled automatically.
+          {s.converted_to && s.converted_to_number && (
+            <>
+              {' '}Converted to{' '}
+              <Link className="mono" to={`${portal ? '/portal' : ''}/subscriptions/${s.converted_to}`}>
+                {s.converted_to_number}
+              </Link>
+              .
+            </>
+          )}
+        </div>
+      )}
+      <ConvertTrialModal subscriptionId={s.id} open={converting} onClose={() => setConverting(false)} portal={portal} />
 
       {s.status === 'quotation' && s.quotation_valid_until && (
         <div className="alert alert-info" style={{ marginTop: 16 }}>

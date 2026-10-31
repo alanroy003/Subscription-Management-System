@@ -107,6 +107,8 @@ class Plan(models.Model):
     closable = models.BooleanField(default=True)
     pausable = models.BooleanField(default=False)
     renewable = models.BooleanField(default=True)
+    is_trial = models.BooleanField(default=False, help_text="Free trial plan: one per customer, ends after trial_days")
+    trial_days = models.PositiveIntegerField(default=30, help_text="Length of the trial when is_trial is set")
 
     class Meta:
         ordering = ["name"]
@@ -203,6 +205,10 @@ class Subscription(models.Model):
     quotation_valid_until = models.DateField(null=True, blank=True)
     notes = models.TextField(blank=True)
     closed_at = models.DateField(null=True, blank=True)
+    converted_to = models.ForeignKey(
+        "self", null=True, blank=True, on_delete=models.SET_NULL, related_name="converted_from",
+        help_text="For a free trial: the paid subscription it was converted into",
+    )
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
     created_at = models.DateTimeField(auto_now_add=True)
 

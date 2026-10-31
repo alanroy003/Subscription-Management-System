@@ -91,6 +91,27 @@ class DetailSerializer(serializers.Serializer):
 AUTH = ["auth"]
 
 
+def _start_signup_trial(user) -> None:
+    """New customers get the free trial on offer, if any (TRIAL_ON_SIGNUP, on by default). Never blocks sign-up."""
+    import logging
+    import os
+
+    if os.environ.get("TRIAL_ON_SIGNUP", "true").lower() != "true":
+        return
+    from core.services import DomainError
+    from core.trials import start_trial, trial_plan
+
+    customer = getattr(user, "customer", None)
+    if customer is None or trial_plan() is None:
+        return
+    try:
+        start_trial(customer, user)
+    except DomainError:
+        pass  # e.g. this company already had a trial under another login
+    except Exception:  # sign-up must succeed even if the trial cannot start
+        logging.getLogger(__name__).exception("Could not start the sign-up trial for %s", user.email)
+
+
 @extend_schema(
     tags=AUTH, summary="Sign up as a customer", request=SignupSerializer,
     responses={201: AuthResponseSerializer, 400: OpenApiResponse(description="Invalid email or weak password")},
@@ -113,6 +134,7 @@ def signup(request):
         else:
             Customer.objects.create(name=name, email=email, user=user)
         audit.record("auth.signup", user, actor=user)
+    _start_signup_trial(user)
     token, _ = Token.objects.get_or_create(user=user)
     return Response({"token": token.key, "user": user_payload(user)}, status=status.HTTP_201_CREATED)
 

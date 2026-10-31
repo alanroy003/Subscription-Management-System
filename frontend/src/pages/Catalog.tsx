@@ -292,6 +292,7 @@ export function PlansPage() {
               {r.closable && <span className="badge">Closable</span>}
               {r.pausable && <span className="badge">Pausable</span>}
               {r.renewable && <span className="badge">Renewable</span>}
+              {r.is_trial && <span className="badge">Free trial · {r.trial_days} days</span>}
             </span>
           ),
         },
@@ -314,6 +315,8 @@ export function PlansPage() {
         closable: true,
         pausable: true,
         renewable: true,
+        is_trial: false,
+        trial_days: 30,
       }}
       fields={[
         { name: 'name', label: 'Name', required: true, span: 2, placeholder: 'Monthly Standard' },
@@ -339,6 +342,8 @@ export function PlansPage() {
         { name: 'closable', label: 'Customer can close', type: 'toggle' },
         { name: 'pausable', label: 'Customer can pause', type: 'toggle' },
         { name: 'renewable', label: 'Customer can renew', type: 'toggle' },
+        { name: 'is_trial', label: 'Free trial plan (price 0, one per customer)', type: 'toggle' },
+        { name: 'trial_days', label: 'Trial length (days)', type: 'number' },
       ]}
       validate={(d): Record<string, string[]> =>
         d.available_from && d.available_to && d.available_to < d.available_from

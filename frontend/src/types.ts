@@ -54,6 +54,8 @@ export interface Plan {
   closable: boolean
   pausable: boolean
   renewable: boolean
+  is_trial?: boolean
+  trial_days?: number
   is_available?: boolean
 }
 
@@ -116,7 +118,7 @@ export interface Customer {
 }
 
 export type SubStatus = 'draft' | 'quotation' | 'confirmed' | 'active' | 'paused' | 'closed'
-export type SubAction = 'send_quotation' | 'confirm' | 'activate' | 'pause' | 'resume' | 'close' | 'renew'
+export type SubAction = 'send_quotation' | 'confirm' | 'activate' | 'pause' | 'resume' | 'close' | 'renew' | 'convert'
 
 export interface SubLine {
   id?: Id
@@ -158,6 +160,9 @@ export interface Subscription {
   subtotal: string
   recurring_total: string
   available_actions: SubAction[]
+  is_trial?: boolean
+  converted_to?: Id | null
+  converted_to_number?: string | null
   events: SubEvent[]
   created_at: string
 }

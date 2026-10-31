@@ -130,6 +130,10 @@ class CustomerViewSet(audit.AuditedModelViewSetMixin, viewsets.ModelViewSet):
         return [IsTeam()]
 
 
+class ConvertTrialSerializer(serializers.Serializer):
+    plan = serializers.IntegerField(help_text="The paid plan to continue on")
+
+
 class SubscriptionViewSet(audit.AuditedModelViewSetMixin, viewsets.ModelViewSet):
     serializer_class = SubscriptionSerializer
     queryset = Subscription.objects.all()
@@ -140,7 +144,7 @@ class SubscriptionViewSet(audit.AuditedModelViewSetMixin, viewsets.ModelViewSet)
         return SubscriptionListSerializer if self.action == "list" else SubscriptionSerializer
 
     def get_queryset(self):
-        qs = Subscription.objects.select_related("customer", "plan")
+        qs = Subscription.objects.select_related("customer", "plan", "converted_to")
         if self.action == "list":
             amount = ExpressionWrapper(F("lines__unit_price") * F("lines__quantity"),
                                        output_field=DecimalField(max_digits=16, decimal_places=2))
@@ -162,7 +166,7 @@ class SubscriptionViewSet(audit.AuditedModelViewSetMixin, viewsets.ModelViewSet)
         return qs
 
     def get_permissions(self):
-        if self.action in ("list", "retrieve", "transition"):
+        if self.action in ("list", "retrieve", "transition", "convert"):  # convert checks ownership itself
             return super().get_permissions()
         return [IsTeam()]
 
@@ -199,6 +203,24 @@ class SubscriptionViewSet(audit.AuditedModelViewSetMixin, viewsets.ModelViewSet)
         audit.record("subscription.created", sub, changes={"template": tpl.name, "customer": customer.pk})
         _domain(lambda: services.transition(sub, "send_quotation", request.user))
         return Response(self.get_serializer(self.get_queryset().get(pk=sub.pk)).data, status=status.HTTP_201_CREATED)
+
+    @extend_schema(
+        summary="Convert a free trial into a paid subscription",
+        description="Creates a subscription on the chosen paid plan with the trial's products, starting when the trial "
+                    "ends (today if it already ended). Staff, or the customer who owns the trial.",
+        request=ConvertTrialSerializer,
+        responses={201: SubscriptionSerializer},
+    )
+    @action(detail=True, methods=["post"])
+    def convert(self, request, pk=None):
+        from .trials import convert_trial
+
+        trial = get_object_or_404(Subscription.objects.filter(
+            pk=pk, **({} if request.user.is_team else {"customer__user": request.user})))
+        body = ConvertTrialSerializer(data=request.data)
+        body.is_valid(raise_exception=True)
+        paid = _domain(lambda: convert_trial(trial, body.validated_data["plan"], request.user))
+        return Response(self.get_serializer(self.get_queryset().get(pk=paid.pk)).data, status=status.HTTP_201_CREATED)
 
     @extend_schema(
         summary="Move a subscription through its lifecycle",
@@ -461,3 +483,51 @@ class RenewalViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
         from .renewals import send_due_reminders
 
         return Response(send_due_reminders(user=request.user).as_dict())
+
+
+TRIAL_INFO = inline_serializer("TrialInfo", {
+    "offered": serializers.BooleanField(),
+    "plan": serializers.DictField(allow_null=True),
+    "eligible": serializers.BooleanField(),
+    "current": serializers.DictField(allow_null=True),
+    "paid_plans": serializers.ListField(child=serializers.DictField()),
+})
+
+
+def _trial_customer(request, customer_id=None) -> Customer:
+    if not request.user.is_team:
+        customer = Customer.objects.filter(user=request.user).first()
+        if customer is None:
+            raise PermissionDenied("Only customers and staff can use free trials.")
+        return customer
+    customer = Customer.objects.filter(pk=customer_id).first()
+    if customer is None:
+        raise ValidationError({"customer": ["Choose the customer."]})
+    return customer
+
+
+@extend_schema(tags=["subscriptions"], summary="Free trial status and offer",
+               description="Customers get their own trial status; staff pass `?customer=<id>`.",
+               parameters=[OpenApiParameter("customer", OpenApiTypes.INT)], responses=TRIAL_INFO)
+@api_view(["GET"])
+def trial_status(request):
+    from .trials import trial_info
+
+    customer = None
+    if not request.user.is_team or request.query_params.get("customer"):
+        customer = _trial_customer(request, request.query_params.get("customer"))
+    return Response(trial_info(customer))
+
+
+@extend_schema(tags=["subscriptions"], summary="Start a free trial",
+               description="One per customer. Customers start their own; staff pass `customer`.",
+               request=inline_serializer("StartTrial", {"customer": serializers.IntegerField(required=False)}),
+               responses={201: SubscriptionSerializer})
+@api_view(["POST"])
+def start_trial_view(request):
+    from .trials import start_trial
+
+    customer = _trial_customer(request, request.data.get("customer"))
+    sub = _domain(lambda: start_trial(customer, request.user))
+    return Response(SubscriptionSerializer(Subscription.objects.get(pk=sub.pk), context={"request": request}).data,
+                    status=status.HTTP_201_CREATED)

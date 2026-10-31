@@ -69,6 +69,16 @@ def validate_for_confirmation(sub: Subscription) -> None:
         raise DomainError(f"Plan '{plan.name}' requires a minimum quantity of {plan.min_quantity}.")
     if sub.expiry_date and sub.expiry_date <= sub.start_date:
         raise DomainError("Expiry date must be after the start date.")
+    if plan.is_trial and customer_had_trial(sub.customer_id, exclude=sub.pk):
+        raise DomainError("This customer has already had a free trial.")
+
+
+def customer_had_trial(customer_id: int, exclude: int | None = None) -> bool:
+    """One free trial per customer: any trial subscription that got past draft counts."""
+    qs = Subscription.objects.filter(customer_id=customer_id, plan__is_trial=True).exclude(status=S.DRAFT)
+    if exclude:
+        qs = qs.exclude(pk=exclude)
+    return qs.exists()
 
 
 def available_actions(sub: Subscription, user) -> list[str]:
@@ -101,13 +111,15 @@ def available_actions(sub: Subscription, user) -> list[str]:
         actions.append("close")
     if sub.status in (S.DRAFT, S.QUOTATION, S.CONFIRMED) and team:
         actions.append("close")
+    if plan.is_trial and not sub.converted_to_id and sub.status in (S.ACTIVE, S.PAUSED, S.CLOSED):
+        actions.append("convert")  # handled by trials.convert_trial, not by transition()
     return actions
 
 
 def transition(sub: Subscription, action: str, user, note: str = "") -> Subscription:
     with transaction.atomic():
         sub = Subscription.objects.select_for_update().select_related("plan", "customer").get(pk=sub.pk)
-        if action not in available_actions(sub, user):
+        if action == "convert" or action not in available_actions(sub, user):
             raise DomainError(f"Action '{action}' is not allowed while the subscription is {sub.status}.")
         old = sub.status
         today = date.today()
@@ -178,7 +190,10 @@ class BillItem:
 
 
 def _period_end(sub: Subscription, period_start: date) -> date:
-    return next_period_start(period_start, sub.plan.billing_period, sub.start_date) - timedelta(days=1)
+    end = next_period_start(period_start, sub.plan.billing_period, sub.start_date) - timedelta(days=1)
+    if sub.expiry_date and sub.expiry_date - timedelta(days=1) < end:
+        end = max(period_start, sub.expiry_date - timedelta(days=1))  # e.g. a 14-day trial on a monthly plan
+    return end
 
 
 def load_discounts() -> tuple[list, dict]:
@@ -304,7 +319,10 @@ def bill_subscription(sub_id: int, as_of: date, catalog: tuple | None = None, as
             for inv in created:
                 if assign_numbers:
                     inv.number = next_number("INV", inv.invoice_date)
-                    Invoice.objects.filter(pk=inv.pk).update(number=inv.number)
+                    # Nothing to collect (free trial, 100% discount): settled at once so it never shows as due.
+                    if inv.total == 0:
+                        inv.status = Invoice.Status.PAID
+                    Invoice.objects.filter(pk=inv.pk).update(number=inv.number, status=inv.status)
                 else:
                     inv.number = "(preview)"
                 items.append(BillItem(sub.number, inv.period_start, inv.total, "created", invoice_number=inv.number))

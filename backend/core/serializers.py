@@ -91,7 +91,8 @@ class PlanSerializer(serializers.ModelSerializer):
     class Meta:
         model = Plan
         fields = ["id", "name", "product", "product_name", "price", "billing_period", "min_quantity", "available_from",
-                  "available_to", "auto_close", "closable", "pausable", "renewable", "is_available"]
+                  "available_to", "auto_close", "closable", "pausable", "renewable", "is_trial", "trial_days",
+                  "is_available"]
 
     def get_is_available(self, plan) -> bool:
         from datetime import date
@@ -104,6 +105,14 @@ class PlanSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"available_to": "Must be on or after the start date."})
         if attrs.get("price") is not None and attrs["price"] < 0:
             raise serializers.ValidationError({"price": "Must not be negative."})
+        if attrs.get("is_trial", getattr(self.instance, "is_trial", False)):
+            price = attrs.get("price", getattr(self.instance, "price", 0))
+            if price:
+                raise serializers.ValidationError({"price": "A free trial plan must be priced at 0."})
+            if not attrs.get("product", getattr(self.instance, "product", None)):
+                raise serializers.ValidationError({"product": "Pick the product this trial lets people try."})
+            if attrs.get("trial_days", getattr(self.instance, "trial_days", 30)) < 1:
+                raise serializers.ValidationError({"trial_days": "A trial lasts at least one day."})
         return attrs
 
 
@@ -234,6 +243,8 @@ class SubscriptionSerializer(serializers.ModelSerializer):
     lines = SubscriptionLineSerializer(many=True, required=False)
     customer_name = serializers.CharField(source="customer.name", read_only=True)
     plan_name = serializers.CharField(source="plan.name", read_only=True)
+    is_trial = serializers.BooleanField(source="plan.is_trial", read_only=True)
+    converted_to_number = serializers.CharField(source="converted_to.number", read_only=True, default=None)
     billing_period = serializers.CharField(source="plan.billing_period", read_only=True)
     subtotal = serializers.SerializerMethodField()
     recurring_total = serializers.SerializerMethodField()
@@ -244,8 +255,9 @@ class SubscriptionSerializer(serializers.ModelSerializer):
         model = Subscription
         fields = ["id", "number", "customer", "customer_name", "plan", "plan_name", "billing_period", "status",
                   "start_date", "expiry_date", "next_invoice_date", "payment_term_days", "quotation_valid_until",
-                  "notes", "lines", "subtotal", "recurring_total", "available_actions", "events", "created_at"]
-        read_only_fields = ["number", "status", "next_invoice_date", "quotation_valid_until"]
+                  "notes", "lines", "subtotal", "recurring_total", "available_actions", "events", "created_at",
+                  "is_trial", "converted_to", "converted_to_number"]
+        read_only_fields = ["number", "status", "next_invoice_date", "quotation_valid_until", "converted_to"]
 
     def get_subtotal(self, sub) -> str:
         return str(sum((l.subtotal for l in sub.lines.all()), ZERO))
@@ -337,6 +349,8 @@ class SubscriptionListSerializer(serializers.ModelSerializer):
 
     customer_name = serializers.CharField(source="customer.name", read_only=True)
     plan_name = serializers.CharField(source="plan.name", read_only=True)
+    is_trial = serializers.BooleanField(source="plan.is_trial", read_only=True)
+    converted_to_number = serializers.CharField(source="converted_to.number", read_only=True, default=None)
     billing_period = serializers.CharField(source="plan.billing_period", read_only=True)
     recurring_total = serializers.DecimalField(source="amount", max_digits=16, decimal_places=2, read_only=True)
     available_actions = serializers.SerializerMethodField()
@@ -345,7 +359,8 @@ class SubscriptionListSerializer(serializers.ModelSerializer):
         model = Subscription
         fields = ["id", "number", "customer", "customer_name", "plan", "plan_name", "billing_period", "status",
                   "start_date", "expiry_date", "next_invoice_date", "payment_term_days", "quotation_valid_until",
-                  "recurring_total", "available_actions", "created_at"]
+                  "recurring_total", "available_actions", "created_at", "is_trial", "converted_to",
+                  "converted_to_number"]
 
     def get_available_actions(self, sub) -> list[str]:
         request = self.context.get("request")

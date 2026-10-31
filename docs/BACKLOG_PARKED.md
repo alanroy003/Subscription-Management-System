@@ -11,3 +11,4 @@
 | Credit notes, refunds, proration, upgrades/downgrades | Phase 2 |
 | Self-checkout from a public pricing page | Not in the PDF; customers sign up and staff quote |
 | GitHub labels, milestones, project board | `gh` not authenticated |
+| SQLite fallback (no DATABASE_URL): `seed` fails on the invoice "total adds up" CHECK because SQLite stores decimals as floats | Pre-existing since database integrity; Supabase/Postgres and all tests unaffected. Fix: make the two "adds up" checks tolerate < 0.005 (~15 min) |

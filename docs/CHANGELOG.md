@@ -1,6 +1,11 @@
 # Changelog
 
 ## Unreleased
+- Free trial: plans can be marked as a free trial (price 0, length in days); new sign-ups get it automatically
+  (`TRIAL_ON_SIGNUP`), customers can start it from the portal and staff for any customer; one trial per customer,
+  enforced everywhere; its 0 invoice is settled at once; it closes itself; Convert to paid plan creates the paid
+  subscription starting when the trial ends. Invoice periods now stop at the expiry date. `GET /api/v1/trial`,
+  `POST /api/v1/trial/start`, `POST /api/v1/subscriptions/{id}/convert`.
 - Renewal reminders: emails 30, 7 and 1 day before a subscription expires (customer, admins copied; team only if the
   customer has no email), each sent once per expiry date, only the most urgent after missed days, fresh set after
   renewal; timeline and audit entries; daily via the scheduler or `manage.py send_renewal_reminders`; Upcoming
