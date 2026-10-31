@@ -36,6 +36,7 @@ Emails (password reset, invoices) are written to `backend/sent_emails/` unless `
 | Quotation templates with validity → subscription with number, lines, payment terms; Draft → Quotation → Confirmed → Active → Paused / Closed with a timeline | Templates, Subscriptions pages |
 | Billing day: invoices generated from subscriptions, GST (CGST+SGST or IGST by place of supply), discounts applied, never twice (unique subscription + period), catch-up, dry run, failure isolation | Billing page · `python scripts/dev.py billing` |
 | Invoice PDF: server-rendered tax invoice with GST breakdown, downloadable by staff and customers, attached to every invoice email | Invoice page → **Download PDF** · `GET /api/v1/invoices/{id}/pdf` |
+| Renewal reminders: emails 30, 7 and 1 day before expiry, each sent once, shown on the subscription timeline | Dashboard → **Upcoming renewals** → Send due reminders · runs daily · `python backend/manage.py send_renewal_reminders` |
 | Discounts: admin only, fixed or %, minimum amount or quantity, dates, usage limit, product or whole-subscription scope | Discounts page |
 | Payments: method, amount, date, note; partial payments; paid / outstanding / overdue | Invoice detail, Payments, Invoices → Overdue |
 | Finance lead: active subscriptions, billed, collected, outstanding, overdue, MRR, ARPU, churn, renewals and 30/60/90-day cash forecast, at-risk customers, filters | Dashboard |

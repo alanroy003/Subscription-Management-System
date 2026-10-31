@@ -1,6 +1,10 @@
 # Changelog
 
 ## Unreleased
+- Renewal reminders: emails 30, 7 and 1 day before a subscription expires (customer, admins copied; team only if the
+  customer has no email), each sent once per expiry date, only the most urgent after missed days, fresh set after
+  renewal; timeline and audit entries; daily via the scheduler or `manage.py send_renewal_reminders`; Upcoming
+  renewals card on the dashboard with a Send due reminders button; `GET /api/v1/renewals`.
 - Invoice PDF: server-rendered tax invoice (GST breakdown, place of supply, payments, balance, Indian digit grouping)
   from the invoice's stored snapshot; `GET /api/v1/invoices/{id}/pdf` (customers: own issued invoices only; staff can
   preview drafts); attached automatically to invoice emails; Download PDF button for staff and in the customer portal.

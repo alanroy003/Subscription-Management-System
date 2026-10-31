@@ -363,3 +363,27 @@ class AuditEventSerializer(serializers.ModelSerializer):
         model = AuditEvent
         fields = ["id", "at", "action", "actor", "actor_label", "via", "api_key_prefix", "object_type", "object_id",
                   "object_ref", "changes", "ip"]
+
+
+class UpcomingRenewalSerializer(serializers.ModelSerializer):
+    customer_name = serializers.CharField(source="customer.name", read_only=True)
+    customer_email = serializers.CharField(source="customer.email", read_only=True)
+    plan_name = serializers.CharField(source="plan.name", read_only=True)
+    renewable = serializers.BooleanField(source="plan.renewable", read_only=True)
+    days_left = serializers.SerializerMethodField()
+    reminders_sent = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Subscription
+        fields = ["id", "number", "customer", "customer_name", "customer_email", "plan_name", "status", "expiry_date",
+                  "days_left", "renewable", "reminders_sent"]
+
+    def get_days_left(self, sub) -> int:
+        from datetime import date
+
+        return (sub.expiry_date - date.today()).days
+
+    def get_reminders_sent(self, sub) -> list[int]:
+        """Thresholds already sent for the current expiry date, e.g. [30, 7]."""
+        return sorted((r.days_before for r in sub.renewal_reminders.all() if r.expiry_date == sub.expiry_date),
+                      reverse=True)
