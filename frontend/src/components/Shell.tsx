@@ -47,7 +47,10 @@ const consoleNav: NavGroup[] = [
   },
   {
     label: 'Settings',
-    items: [{ to: '/users', label: 'Users', icon: <Icon.shield />, adminOnly: true }],
+    items: [
+      { to: '/users', label: 'Users', icon: <Icon.shield />, adminOnly: true },
+      { to: '/api-keys', label: 'API keys', icon: <Icon.loop />, adminOnly: true },
+    ],
   },
 ]
 

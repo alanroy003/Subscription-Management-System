@@ -1,0 +1,6 @@
+**/.venv
+**/node_modules
+**/__pycache__
+backend/sent_emails
+.git
+.env

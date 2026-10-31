@@ -7,7 +7,8 @@ from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from rest_framework import mixins, serializers, status, viewsets
 from rest_framework.authtoken.models import Token
-from rest_framework.decorators import api_view, permission_classes, throttle_classes
+from django.utils import timezone
+from rest_framework.decorators import action, api_view, permission_classes, throttle_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
@@ -15,6 +16,7 @@ from rest_framework.throttling import AnonRateThrottle
 from core.models import Customer
 from core.permissions import IsAdmin
 
+from .apikeys import ApiKey
 from .models import User
 from .validators import password_problems
 
@@ -175,3 +177,34 @@ class UserViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, mixins.UpdateM
     serializer_class = UserSerializer
     permission_classes = [IsAuthenticated, IsAdmin]
     search_fields = ["email", "name"]
+
+
+class ApiKeySerializer(serializers.ModelSerializer):
+    scopes = serializers.ListField(child=serializers.ChoiceField(choices=["read", "write"]), allow_empty=False)
+
+    class Meta:
+        model = ApiKey
+        fields = ["id", "name", "prefix", "scopes", "created_at", "last_used_at", "revoked_at"]
+        read_only_fields = ["prefix", "created_at", "last_used_at", "revoked_at"]
+
+
+class ApiKeyViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, viewsets.GenericViewSet):
+    """Admin-only management of public API keys. The full key is returned once, on creation."""
+
+    queryset = ApiKey.objects.select_related("created_by")
+    serializer_class = ApiKeySerializer
+    permission_classes = [IsAuthenticated, IsAdmin]
+
+    def create(self, request, *args, **kwargs):
+        ser = self.get_serializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        key, raw = ApiKey.issue(ser.validated_data["name"], sorted(set(ser.validated_data["scopes"])), request.user)
+        return Response({**ApiKeySerializer(key).data, "key": raw}, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["post"])
+    def revoke(self, request, pk=None):
+        key = self.get_object()
+        if not key.revoked_at:
+            key.revoked_at = timezone.now()
+            key.save(update_fields=["revoked_at"])
+        return Response(ApiKeySerializer(key).data)

@@ -12,11 +12,12 @@ Mode: BUILD (time-boxed MVP, gates waived by the owner, see `APPROVAL_LOG.md`). 
 | Billing day (auto invoices, taxes, confirm/cancel/send/print, never twice or skipped) | Yes | `test_golden_billing_month`, `test_dry_run_changes_nothing`, `test_failure_isolation` |
 | A customer asks for a better price (admin-only discounts, limits, auto-apply, stop when out) | Yes | golden test (limit 2 exhausted on cycle 3), `test_cancel_releases_discount_usage` |
 | The money comes in (method, amount, date, note; paid vs outstanding; overdue) | Yes | golden test, `test_invoice_actions_and_overdue_filter` |
-| The finance lead (active, revenue, payments, overdue, filters, summary, < 2 s) | Yes | `reports.summary`, `scripts/perf_check.py` (worst p95 ~1 s on Supabase eu-west-1) |
+| The finance lead (active, revenue, payments, overdue, filters, summary, < 2 s) | Yes | `reports.summary`; `scripts/perf_check.py` at 10k subscriptions / 75k invoices: worst p95 1.5 s |
+| Wow Pack: public API (hashed scoped revocable keys, /api/v1, idempotency, rate limit), GST presets, MRR/ARPU/churn, 30/60/90 forecast, at-risk list | Yes | `tests/test_public_api.py`, dashboard |
 
 ## Now / Next / Blocked
-- Now: frontend integration and end-to-end demo check.
-- Next: README quick start, demo runbook.
+- Done: every PDF scene works end to end in the browser against Supabase (staff, admin, customer portal).
+- Next (optional): verify Docker Compose once Docker Desktop runs; move Supabase to ap-south-1 for faster writes.
 - Blocked: `gh` not authenticated (no PRs or GitHub board).
 
 ## Top risks

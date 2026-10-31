@@ -48,8 +48,27 @@ python scripts/dev.py perf       # times every main endpoint against the configu
 
 - Money is `Decimal` only, rounded half-up to 2 dp per line and tax component; invoices store tax and discount snapshots;
   confirmed invoices are immutable.
-- Measured against Supabase `eu-west-1` (~210 ms per round trip from the dev machine): every endpoint p95 under ~1.1 s.
+- Scale test against Supabase `eu-west-1` (~210 ms per round trip from the dev machine) with **10,000 subscriptions,
+  75,428 invoices, 104,879 invoice lines and 67,437 payments** (`seed --reset --subs 10000`): every endpoint p95 under
+  1.6 s, dashboard summary p95 0.8 s (`python scripts/dev.py perf`). Write actions that bill (confirm, billing run) take
+  2 to 10 s because every statement crosses the ocean; a Supabase project in `ap-south-1` (Mumbai) would cut that ~5x.
 - RLS is enabled on all public tables so the Supabase Data API cannot read business data with the publishable key.
+
+## Public API
+
+Admins create keys on **API keys** (hashed at rest, scoped `read` / `write`, revocable, shown once). Call any endpoint
+under `/api/v1/` with `X-API-Key: <key>`; add `Idempotency-Key: <unique id>` to POSTs so retries replay the first
+response instead of creating duplicates. Rate limit: 120 requests/min per key (`API_KEY_RATE`). Interactive docs with
+the full schema: http://127.0.0.1:8000/api/docs.
+
+```bash
+curl -H "X-API-Key: $KEY" http://127.0.0.1:8000/api/v1/invoices?overdue=true
+```
+
+## Docker (optional)
+
+`docker compose up --build` runs the API, the web app, a daily billing scheduler (`backend/scheduler.py`, 02:00 IST,
+idempotent catch-up) and Mailpit (http://localhost:8025) for emails. It uses the same `.env`.
 
 Docs: [`docs/01-planning/mvp-plan.md`](docs/01-planning/mvp-plan.md) (domain rules, API contract) ·
 [`docs/runbooks/demo.md`](docs/runbooks/demo.md) (5-minute demo) · [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md).

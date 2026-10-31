@@ -1,0 +1,32 @@
+# Optional containerised run. Native run: python scripts/dev.py up
+services:
+  api:
+    build: { context: ., dockerfile: backend/Dockerfile }
+    env_file: .env
+    environment:
+      EMAIL_HOST: mailpit
+      EMAIL_PORT: "1025"
+      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,api
+    ports: ["8000:8000"]
+    depends_on: [mailpit]
+
+  scheduler:
+    build: { context: ., dockerfile: backend/Dockerfile }
+    env_file: .env
+    environment:
+      EMAIL_HOST: mailpit
+      EMAIL_PORT: "1025"
+      TZ: Asia/Kolkata
+    command: ["python", "scheduler.py"]
+    depends_on: [api]
+
+  web:
+    build: { context: frontend }
+    environment:
+      VITE_PROXY_TARGET: http://api:8000
+    ports: ["5173:5173"]
+    depends_on: [api]
+
+  mailpit:
+    image: axllent/mailpit:v1.21
+    ports: ["8025:8025", "1025:1025"]

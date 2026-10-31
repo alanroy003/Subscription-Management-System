@@ -44,3 +44,6 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.email
+
+
+from .apikeys import ApiKey, IdempotencyRecord  # noqa: E402,F401  (models registered with this app)

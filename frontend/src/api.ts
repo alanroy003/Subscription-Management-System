@@ -97,7 +97,7 @@ const TRAILING_SLASH = import.meta.env.VITE_API_TRAILING_SLASH === 'true'
 
 function url(path: string) {
   const clean = path.startsWith('/') ? path : `/${path}`
-  let full = clean.startsWith('/api') ? clean : `/api${clean}`
+  let full = clean.startsWith('/api/') ? clean : `/api${clean}`
   if (TRAILING_SLASH) {
     const [p, q] = full.split('?')
     full = (p.endsWith('/') ? p : `${p}/`) + (q ? `?${q}` : '')

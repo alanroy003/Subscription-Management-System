@@ -8,6 +8,7 @@ from core import views
 
 router = DefaultRouter(trailing_slash=False)
 router.register("users", auth_views.UserViewSet, basename="user")
+router.register("api-keys", auth_views.ApiKeyViewSet)
 router.register("tax-groups", views.TaxGroupViewSet)
 router.register("products", views.ProductViewSet)
 router.register("plans", views.PlanViewSet)
@@ -38,4 +39,5 @@ api = [
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/", include(api)),
+    path("api/v1/", include(api)),  # versioned base path for the public API (same contract)
 ]

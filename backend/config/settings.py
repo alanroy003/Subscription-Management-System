@@ -52,6 +52,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "accounts.apikeys.IdempotencyMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -93,7 +94,11 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 CORS_ALLOWED_ORIGINS = [o for o in os.environ.get("CORS_ALLOWED_ORIGINS", "http://localhost:5173").split(",") if o]
 
 REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": ["rest_framework.authentication.TokenAuthentication"],
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "accounts.apikeys.ApiKeyAuthentication",
+        "rest_framework.authentication.TokenAuthentication",
+    ],
+    "DEFAULT_THROTTLE_CLASSES": ["accounts.apikeys.ApiKeyThrottle"],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
     "DEFAULT_PAGINATION_CLASS": "core.pagination.Pagination",
     "DEFAULT_FILTER_BACKENDS": ["rest_framework.filters.SearchFilter", "rest_framework.filters.OrderingFilter"],
@@ -103,7 +108,12 @@ REST_FRAMEWORK = {
 SPECTACULAR_SETTINGS = {
     "TITLE": "Brightloop Subscription Management API",
     "VERSION": "1.0.0",
-    "DESCRIPTION": "Products, plans, subscriptions, recurring invoices, payments and finance reports.",
+    "DESCRIPTION": (
+        "Products, plans, subscriptions, recurring invoices, payments and finance reports.\n\n"
+        "**Public API:** send `X-API-Key: <key>` (created by an admin on the API keys page). Keys are scoped "
+        "`read` and/or `write`, rate limited (120 requests/min by default) and revocable. Versioned base path: "
+        "`/api/v1/`. Send an `Idempotency-Key` header on POST to make retries safe: the first response is replayed."
+    ),
 }
 
 # Email: SMTP when EMAIL_HOST is set (e.g. Mailpit), otherwise files in backend/sent_emails/.

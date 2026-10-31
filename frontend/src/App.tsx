@@ -1,8 +1,10 @@
+import { lazy, Suspense } from 'react'
 import { Link, Navigate, Route, Routes } from 'react-router-dom'
 import { homeFor, RequireRole, useAuth } from './auth'
 import { Shell } from './components/Shell'
-import { EmptyState } from './components/ui'
+import { EmptyState, Skeleton } from './components/ui'
 import { ForgotPasswordPage, LoginPage, ResetPasswordPage, SignupPage } from './pages/auth/AuthPages'
+import { ApiKeysPage } from './pages/ApiKeys'
 import { BillingPage } from './pages/Billing'
 import {
   CustomersPage,
@@ -13,10 +15,12 @@ import {
   TemplatesPage,
   UsersPage,
 } from './pages/Catalog'
-import { DashboardPage } from './pages/Dashboard'
 import { InvoiceDetailPage, InvoicePrintPage, InvoicesPage, PaymentsPage } from './pages/Invoices'
 import { PortalHomePage } from './pages/portal/PortalHome'
 import { NewSubscriptionPage, SubscriptionDetailPage, SubscriptionsPage } from './pages/Subscriptions'
+
+// The dashboard pulls in the charting library, so it loads on demand.
+const DashboardPage = lazy(() => import('./pages/Dashboard').then((m) => ({ default: m.DashboardPage })))
 
 const STAFF = ['admin', 'staff'] as const
 const ADMIN = ['admin'] as const
@@ -75,7 +79,14 @@ export default function App() {
           </RequireRole>
         }
       >
-        <Route path="/dashboard" element={<DashboardPage />} />
+        <Route
+          path="/dashboard"
+          element={
+            <Suspense fallback={<Skeleton h={400} />}>
+              <DashboardPage />
+            </Suspense>
+          }
+        />
         <Route path="/subscriptions" element={<SubscriptionsPage />} />
         <Route path="/subscriptions/new" element={<NewSubscriptionPage />} />
         <Route path="/subscriptions/:id" element={<SubscriptionDetailPage />} />
@@ -94,6 +105,14 @@ export default function App() {
           element={
             <RequireRole roles={[...ADMIN]}>
               <UsersPage />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/api-keys"
+          element={
+            <RequireRole roles={[...ADMIN]}>
+              <ApiKeysPage />
             </RequireRole>
           }
         />

@@ -20,7 +20,7 @@ Option 2:
 | Database | Supabase Postgres, **session pooler** (`DATABASE_URL`, port 5432), psycopg 3 client pool (`OPTIONS.pool`, 2 to 10) | The transaction pooler (6543) is not used: Django needs session state |
 | Latency | Read endpoints are 2 to 4 queries; dashboard runs 9 aggregates in parallel; billing run bills subscriptions in parallel, each in its own transaction | Measured p95 under 1 s for every endpoint (`scripts/perf_check.py`) |
 | RLS | Enabled on every public table with no policies (migration `core/0002`), so the Supabase Data API with the publishable key sees nothing. Django (table owner) is not restricted; customer isolation is enforced in querysets with negative tests | Not per-customer RLS policies |
-| Scheduler | `manage.py run_billing` (Task Scheduler / cron) + "Run billing" button with dry run | No scheduler container |
+| Scheduler | `manage.py run_billing` + "Run billing" button with dry run; `scheduler` service in Docker Compose runs it daily | Plain loop, no Postgres advisory lock: run one scheduler only (billing is idempotent anyway) |
 | Email | SMTP if `EMAIL_HOST` is set (Mailpit), else files in `backend/sent_emails/` | |
 | Print/PDF | Print-styled invoice page in the browser (Save as PDF) | No WeasyPrint/GTK on Windows |
 | Tests | pytest on SQLite (offline, fast) | Postgres-only behaviour (row locks) is not exercised in tests |
@@ -29,7 +29,7 @@ Option 2:
 
 ## Consequences
 - Phase 2 can still add Supabase Auth by mapping JWT `sub` to `User`; the domain does not depend on the auth provider.
-- Docker Compose, Mailpit, public API keys, webhooks and AI are parked (`docs/BACKLOG_PARKED.md`).
+- Public API keys, idempotency and rate limits were added after the core (Wow Pack). Webhooks and AI are parked.
 
 ## Links
 `docs/01-planning/mvp-plan.md` (rules and API contract), `backend/core/services.py`, `backend/core/pricing.py`.
