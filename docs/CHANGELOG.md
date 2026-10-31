@@ -10,9 +10,9 @@
 - Database integrity: CHECK constraints for money rules; Postgres triggers make issued invoices, their lines and payments
   immutable (status only moves forward); nightly reconciliation (`manage.py reconcile`) with admin email alerts, an
   integrity API and a Data integrity card on the Billing page; database rule violations return 400 instead of 500.
-- Audit log: append-only record of sign-ins (and failures), sign-ups, password resets, user and API key changes,
-  catalog/tax/discount create-update-delete with field diffs, subscription transitions, invoice confirm/cancel/send,
-  payments, billing runs and data checks; actor, channel (web, API key, system) and IP captured automatically; written
+- Audit log: append-only record of sign-ins (and failures), sign-ups, password resets, user changes, issued and
+  revoked access keys, catalog, tax and discount edits with field diffs, subscription transitions, invoice confirm,
+  cancel and send, payments, billing runs and data checks; actor, channel (web, API key, system) and IP captured automatically; written
   in the same transaction; Postgres trigger blocks edits; doubles as the event outbox; admin Audit log page.
 - API docs: Swagger (`/api/docs`) and ReDoc (`/api/redoc`) for the versioned API with a usage guide, grouped
   endpoints, request/response schemas for every operation and Token + API key authorization; schema validated in CI.

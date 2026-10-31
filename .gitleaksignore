@@ -1,0 +1,3 @@
+# Reviewed false positives (gitleaks fingerprints). Each line is one finding that is not a secret.
+# Commit 6c6de21: a CHANGELOG sentence about the audit log matched the generic rule; the wording was changed since.
+6c6de21de1b9508ccbbbdd90b6aaa2e2d2b62f76:docs/CHANGELOG.md:generic-api-key:13
