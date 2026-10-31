@@ -1,5 +1,6 @@
-from accounts.apikeys import ApiKey
 from rest_framework.test import APIClient
+
+from accounts.apikeys import ApiKey
 
 from .conftest import client_for
 
@@ -27,9 +28,12 @@ def test_api_key_lifecycle_scopes_and_idempotency(admin_user, golden):
     assert admin.post(f"/api/api-keys/{key_id}/revoke").json()["revoked_at"]
     c.credentials(HTTP_X_API_KEY=raw)
     assert c.get("/api/v1/subscriptions").status_code == 401
-    c.credentials(HTTP_X_API_KEY="bl_nope_nope")
+    c.credentials(HTTP_X_API_KEY="bl_nope_nope")  # pragma: allowlist secret
     assert c.get("/api/v1/subscriptions").status_code == 401
 
 
 def test_only_admin_manages_keys(staff_user):
-    assert client_for(staff_user).post("/api/api-keys", {"name": "x", "scopes": ["read"]}, format="json").status_code == 403
+    assert (
+        client_for(staff_user).post("/api/api-keys", {"name": "x", "scopes": ["read"]}, format="json").status_code
+        == 403
+    )

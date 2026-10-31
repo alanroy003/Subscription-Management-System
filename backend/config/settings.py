@@ -73,7 +73,13 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 
 # Supabase session pooler (port 5432). Tests use SQLite so they run offline.
-if TESTING or not os.environ.get("DATABASE_URL"):
+TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL", "")
+if TESTING and TEST_DATABASE_URL:
+    # Tests on a throwaway local Postgres (CI service or docker). The suite flushes tables, so never a shared DB.
+    if "supabase" in TEST_DATABASE_URL:
+        raise RuntimeError("TEST_DATABASE_URL must point at a disposable local Postgres, never Supabase.")
+    DATABASES = {"default": dj_database_url.parse(TEST_DATABASE_URL, conn_max_age=0)}
+elif TESTING or not os.environ.get("DATABASE_URL"):
     DATABASES = {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": BASE_DIR / "test.sqlite3"}}
 else:
     # The pooler is ~200 ms away, so a client-side pool avoids a TLS handshake per request.

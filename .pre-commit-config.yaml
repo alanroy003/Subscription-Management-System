@@ -1,0 +1,17 @@
+# Local checks for manual commits. Install once: python scripts/dev.py hooks
+repos:
+  - repo: local
+    hooks:
+      - id: detect-secrets
+        name: detect-secrets (block new secrets)
+        entry: detect-secrets-hook
+        language: python
+        additional_dependencies: ["detect-secrets==1.5.0"]
+        args: ["--baseline", ".secrets.baseline"]
+        exclude: ^(\.secrets\.baseline|frontend/package-lock\.json)$
+      - id: no-env-files
+        name: block .env files (only .env.example may be committed)
+        entry: .env files must never be committed
+        language: fail
+        files: (^|/)\.env(\..+)?$
+        exclude: (^|/)\.env\.example$

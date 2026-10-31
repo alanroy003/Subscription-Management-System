@@ -13,8 +13,17 @@ from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
 
-from .models import (BillingRun, Customer, Discount, Invoice, InvoiceLine, Payment, Sequence, Subscription,
-                     SubscriptionEvent)
+from .models import (
+    BillingRun,
+    Customer,
+    Discount,
+    Invoice,
+    InvoiceLine,
+    Payment,
+    Sequence,
+    Subscription,
+    SubscriptionEvent,
+)
 from .money import ZERO, next_period_start, q
 from .parallel import map_parallel
 from .pricing import LineInput, price_lines
@@ -79,7 +88,13 @@ def available_actions(sub: Subscription, user) -> list[str]:
         actions.append("resume")
     if sub.status in (S.ACTIVE, S.PAUSED) and plan.renewable and sub.expiry_date:
         actions.append("renew")
-    if sub.status == S.CLOSED and plan.renewable and sub.expiry_date and sub.closed_at and sub.closed_at >= sub.expiry_date:
+    if (
+        sub.status == S.CLOSED
+        and plan.renewable
+        and sub.expiry_date
+        and sub.closed_at
+        and sub.closed_at >= sub.expiry_date
+    ):
         actions.append("renew")
     if sub.status in (S.ACTIVE, S.PAUSED) and (plan.closable or user.is_admin):
         actions.append("close")
@@ -112,7 +127,9 @@ def transition(sub: Subscription, action: str, user, note: str = "") -> Subscrip
             sub.status = S.ACTIVE
             # Periods that started while paused are not billed: move to the first period start >= today.
             while sub.next_invoice_date and sub.next_invoice_date < today:
-                sub.next_invoice_date = next_period_start(sub.next_invoice_date, sub.plan.billing_period, sub.start_date)
+                sub.next_invoice_date = next_period_start(
+                    sub.next_invoice_date, sub.plan.billing_period, sub.start_date
+                )
         elif action == "renew":
             term = sub.expiry_date - sub.start_date
             sub.expiry_date = sub.expiry_date + term
@@ -165,7 +182,9 @@ def _period_end(sub: Subscription, period_start: date) -> date:
 def load_discounts() -> tuple[list, dict]:
     discounts = list(Discount.objects.filter(is_active=True))
     scopes: dict[int, set] = {}
-    for d_id, p_id in Discount.products.through.objects.filter(discount__in=discounts).values_list("discount_id", "product_id"):
+    for d_id, p_id in Discount.products.through.objects.filter(discount__in=discounts).values_list(
+        "discount_id", "product_id"
+    ):
         scopes.setdefault(d_id, set()).add(p_id)
     return discounts, scopes
 
@@ -274,7 +293,9 @@ def bill_subscription(sub_id: int, as_of: date, catalog: tuple | None = None, as
                 if sub.expiry_date and sub.next_invoice_date >= sub.expiry_date:
                     break
                 created.append(create_invoice(sub, sub.next_invoice_date, catalog, claim=assign_numbers))
-                sub.next_invoice_date = next_period_start(sub.next_invoice_date, sub.plan.billing_period, sub.start_date)
+                sub.next_invoice_date = next_period_start(
+                    sub.next_invoice_date, sub.plan.billing_period, sub.start_date
+                )
             if sub.next_invoice_date != billed_from:
                 sub.save(update_fields=["next_invoice_date"])
             # Gap-free numbers last, so the sequence row lock is held for the fewest round trips.
@@ -367,7 +388,9 @@ def cancel_invoice(invoice: Invoice) -> Invoice:
         invoice.status = Invoice.Status.CANCELLED
         invoice.save(update_fields=["status"])
         # Release discount usage so a cancelled invoice does not consume the limit.
-        Discount.objects.filter(pk__in=invoice.applied_discounts, used_count__gt=0).update(used_count=F("used_count") - 1)
+        Discount.objects.filter(pk__in=invoice.applied_discounts, used_count__gt=0).update(
+            used_count=F("used_count") - 1
+        )
     return invoice
 
 
@@ -402,7 +425,9 @@ def record_payment(invoice: Invoice, method: str, amount: Decimal, on: date, not
             raise DomainError("Amount must be positive.")
         if amount > invoice.balance:
             raise DomainError(f"Amount exceeds the outstanding balance of {invoice.balance}.")
-        payment = Payment.objects.create(invoice=invoice, method=method, amount=amount, date=on, note=note, created_by=user)
+        payment = Payment.objects.create(
+            invoice=invoice, method=method, amount=amount, date=on, note=note, created_by=user
+        )
         invoice.amount_paid += amount
         if invoice.balance == 0:
             invoice.status = Invoice.Status.PAID

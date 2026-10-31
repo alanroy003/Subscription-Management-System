@@ -7,7 +7,7 @@ from rest_framework.test import APIClient
 from accounts.models import User
 from core.models import Customer, Discount, Plan, Product, ProductVariant, Subscription, SubscriptionLine, TaxGroup
 
-PASSWORD = "Strong#Pass1"
+PASSWORD = "Strong#Pass1"  # pragma: allowlist secret (test value)
 
 
 @pytest.fixture

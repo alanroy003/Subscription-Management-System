@@ -16,13 +16,28 @@ from django.core.management.base import BaseCommand
 from django.db import connection, transaction
 
 from accounts.models import User
-from core.models import (BillingRun, Customer, Discount, Invoice, InvoiceLine, Payment, Plan, Product, ProductVariant,
-                         QuotationTemplate, QuotationTemplateLine, Sequence, Subscription, SubscriptionEvent,
-                         SubscriptionLine, TaxGroup)
+from core.models import (
+    BillingRun,
+    Customer,
+    Discount,
+    Invoice,
+    InvoiceLine,
+    Payment,
+    Plan,
+    Product,
+    ProductVariant,
+    QuotationTemplate,
+    QuotationTemplateLine,
+    Sequence,
+    Subscription,
+    SubscriptionEvent,
+    SubscriptionLine,
+    TaxGroup,
+)
 from core.money import next_period_start, q
 from core.pricing import LineInput, default_unit_price, price_lines
 
-DEFAULT_DEMO_PASSWORD = "Demo#Pass2026"
+DEFAULT_DEMO_PASSWORD = "Demo#Pass2026"  # pragma: allowlist secret (local demo value)
 D = Decimal
 
 COMPANIES = ["Acme Traders", "Sunrise Textiles", "Patel Agro Foods", "Mehta Logistics", "Kaveri Pharma", "Blue Lotus Cafe",
@@ -217,7 +232,7 @@ class Command(BaseCommand):
 
         subs = Subscription.objects.bulk_create(subs, batch_size=2000)
         sub_lines, events = [], []
-        for sub, lines in zip(subs, line_specs):
+        for sub, lines in zip(subs, line_specs, strict=True):
             for product, variant, qty in lines:
                 sub_lines.append(SubscriptionLine(subscription=sub, product=product, variant=variant, quantity=qty,
                                                   unit_price=default_unit_price(sub.plan, product, variant),
@@ -240,7 +255,7 @@ class Command(BaseCommand):
 
         invoices, inv_lines, pay_plans = [], [], []
         used = {}
-        for sub, meta in zip(subs, sub_meta):
+        for sub, meta in zip(subs, sub_meta, strict=True):
             if sub.status in ("draft", "quotation", "confirmed"):
                 continue
             period = sub.plan.billing_period
@@ -293,7 +308,7 @@ class Command(BaseCommand):
 
         invoices = Invoice.objects.bulk_create(invoices, batch_size=2000)
         rows = []
-        for inv, priced_lines in zip(invoices, inv_lines):
+        for inv, priced_lines in zip(invoices, inv_lines, strict=True):
             for pl in priced_lines:
                 rows.append(InvoiceLine(invoice=inv, product_id=pl.product_id, description=pl.description,
                                         quantity=pl.quantity, unit_price=pl.unit_price, subtotal=pl.subtotal,

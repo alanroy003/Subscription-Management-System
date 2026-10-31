@@ -1,6 +1,5 @@
 """Finance summary. Nine database aggregates, run in parallel, so the dashboard stays fast at scale."""
 from datetime import date, timedelta
-from decimal import Decimal
 
 from django.db.models import Count, DecimalField, ExpressionWrapper, F, Q, Sum
 from django.db.models.functions import Coalesce, TruncMonth
@@ -36,15 +35,21 @@ def summary(date_from: date | None = None, date_to: date | None = None) -> dict:
         return {r["status"]: r["n"] for r in Subscription.objects.values("status").annotate(n=Count("id")).order_by()}
 
     def sub_stats():
-        agg = {"churned": Count("id", filter=Q(status=Subscription.Status.CLOSED, closed_at__gte=today - timedelta(days=30))),
-               "paying": Count("customer", distinct=True, filter=Q(status=ACTIVE))}
+        agg = {
+            "churned": Count(
+                "id", filter=Q(status=Subscription.Status.CLOSED, closed_at__gte=today - timedelta(days=30))
+            ),
+            "paying": Count("customer", distinct=True, filter=Q(status=ACTIVE)),
+        }
         for d in HORIZONS:
             agg[f"r{d}"] = Count("id", filter=Q(status=ACTIVE, expiry_date__range=(today, today + timedelta(days=d))))
         return Subscription.objects.aggregate(**agg)
 
     def invoice_stats():
         agg = {
-            "billed": _money_sum("total", status__in=[OPEN, Invoice.Status.PAID], invoice_date__range=(date_from, date_to)),
+            "billed": _money_sum(
+                "total", status__in=[OPEN, Invoice.Status.PAID], invoice_date__range=(date_from, date_to)
+            ),
             "outstanding": _money_sum(balance, status=OPEN),
             "overdue_amount": _money_sum(balance, status=OPEN, due_date__lt=today),
             "overdue_count": Count("id", filter=Q(status=OPEN, due_date__lt=today)),

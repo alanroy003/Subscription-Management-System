@@ -1,12 +1,10 @@
 import re
-from pathlib import Path
 
 import pytest
-from django.conf import settings
 from rest_framework.test import APIClient
 
 from accounts.models import User
-from core.models import Customer, Subscription
+from core.models import Customer
 
 from .conftest import PASSWORD, client_for, make_user
 
@@ -39,7 +37,8 @@ def test_login_and_me(db):
     assert r.status_code == 200
     c.credentials(HTTP_AUTHORIZATION=f"Token {r.json()['token']}")
     assert c.get("/api/auth/me").json()["role"] == "staff"
-    assert APIClient().post("/api/auth/login", {"email": "a@x.com", "password": "wrong"}, format="json").status_code == 400
+    wrong = {"email": "a@x.com", "password": "wrong"}  # pragma: allowlist secret
+    assert APIClient().post("/api/auth/login", wrong, format="json").status_code == 400
 
 
 def test_password_reset_flow(db, tmp_path, settings):
@@ -53,9 +52,11 @@ def test_password_reset_flow(db, tmp_path, settings):
     uid, token = re.search(r"uid=([^&]+)&token=(\S+)", mail.outbox[0].body).groups()
     r = c.post("/api/auth/password-reset/confirm", {"uid": uid, "token": token, "password": "weak"}, format="json")
     assert r.status_code == 400
-    r = c.post("/api/auth/password-reset/confirm", {"uid": uid, "token": token, "password": "Newer#Pass22"}, format="json")
+    new_password = "Newer#Pass22"  # pragma: allowlist secret
+    body = {"uid": uid, "token": token, "password": new_password}
+    r = c.post("/api/auth/password-reset/confirm", body, format="json")
     assert r.status_code == 200
-    assert c.post("/api/auth/login", {"email": "r@x.com", "password": "Newer#Pass22"}, format="json").status_code == 200
+    assert c.post("/api/auth/login", {"email": "r@x.com", "password": new_password}, format="json").status_code == 200
 
 
 def test_only_admin_adds_staff(admin_user, staff_user):
@@ -82,8 +83,9 @@ def test_customer_isolation(golden):
     other = make_user("other@example.com", User.Role.CUSTOMER)
     Customer.objects.create(name="Other", email="other@example.com", user=other)
     sub = golden["sub"]
-    from core import services
     from datetime import date
+
+    from core import services
     services.run_billing(date(2026, 1, 15))
     from core.models import Invoice
     inv = services.confirm_invoice(Invoice.objects.get())

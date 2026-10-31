@@ -1,9 +1,23 @@
 from django.db import transaction
 from rest_framework import serializers
 
-from .models import (BillingRun, Customer, Discount, Invoice, InvoiceLine, Payment, Plan, Product, ProductVariant,
-                     QuotationTemplate, QuotationTemplateLine, Subscription, SubscriptionEvent, SubscriptionLine,
-                     TaxGroup)
+from .models import (
+    BillingRun,
+    Customer,
+    Discount,
+    Invoice,
+    InvoiceLine,
+    Payment,
+    Plan,
+    Product,
+    ProductVariant,
+    QuotationTemplate,
+    QuotationTemplateLine,
+    Subscription,
+    SubscriptionEvent,
+    SubscriptionLine,
+    TaxGroup,
+)
 from .money import ZERO
 from .pricing import default_unit_price
 from .services import available_actions

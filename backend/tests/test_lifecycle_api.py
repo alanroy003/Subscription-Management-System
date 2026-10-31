@@ -38,8 +38,16 @@ def test_min_quantity_and_availability_enforced(golden, staff_user):
     plan.available_to = date(2020, 1, 1)
     plan.save()
     c = client_for(staff_user)
-    r = c.post("/api/subscriptions", {"customer": golden["customer"].id, "plan": plan.id, "start_date": str(date.today()),
-                                      "lines": [{"product": golden["crm"].id, "quantity": 2}]}, format="json")
+    r = c.post(
+        "/api/subscriptions",
+        {
+            "customer": golden["customer"].id,
+            "plan": plan.id,
+            "start_date": str(date.today()),
+            "lines": [{"product": golden["crm"].id, "quantity": 2}],
+        },
+        format="json",
+    )
     assert r.status_code == 201
     r = c.post(f"/api/subscriptions/{r.json()['id']}/transition", {"action": "confirm"}, format="json")
     assert r.status_code == 400 and "not available" in r.json()["detail"]

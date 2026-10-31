@@ -85,8 +85,14 @@ def test_dry_run_changes_nothing(golden):
 
 def test_failure_isolation(golden):
     from core.models import Subscription
-    broken = Subscription.objects.create(number="SUB-T-2", customer=golden["customer"], plan=golden["plan"],
-                                         status="active", start_date=date(2026, 1, 1), next_invoice_date=date(2026, 1, 1))
+    broken = Subscription.objects.create(
+        number="SUB-T-2",
+        customer=golden["customer"],
+        plan=golden["plan"],
+        status="active",
+        start_date=date(2026, 1, 1),
+        next_invoice_date=date(2026, 1, 1),
+    )
     run = services.run_billing(date(2026, 1, 20))  # broken has no lines
     assert run.failed == 1 and run.created == 1
     assert not Invoice.objects.filter(subscription=broken).exists()

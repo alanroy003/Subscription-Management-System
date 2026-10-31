@@ -16,7 +16,9 @@ class Customer(models.Model):
     address = models.TextField(blank=True)
     state = models.CharField(max_length=80, blank=True, help_text="Place of supply for GST")
     gstin = models.CharField(max_length=20, blank=True)
-    user = models.OneToOneField(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="customer")
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="customer"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -84,7 +86,9 @@ class Plan(models.Model):
         YEARLY = "yearly", "Yearly"
 
     name = models.CharField(max_length=200)
-    product = models.ForeignKey(Product, null=True, blank=True, on_delete=models.SET_NULL, help_text="Base product billed by this plan")
+    product = models.ForeignKey(
+        Product, null=True, blank=True, on_delete=models.SET_NULL, help_text="Base product billed by this plan"
+    )
     price = models.DecimalField(**MONEY)
     billing_period = models.CharField(max_length=10, choices=Period.choices, default=Period.MONTHLY)
     min_quantity = models.PositiveIntegerField(default=1)
@@ -98,13 +102,13 @@ class Plan(models.Model):
     class Meta:
         ordering = ["name"]
 
+    def __str__(self):
+        return self.name
+
     def is_available_on(self, day: date) -> bool:
         return (self.available_from is None or self.available_from <= day) and (
             self.available_to is None or day <= self.available_to
         )
-
-    def __str__(self):
-        return self.name
 
 
 class Discount(models.Model):

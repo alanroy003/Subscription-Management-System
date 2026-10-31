@@ -10,14 +10,15 @@ GitHub Actions. Architecture decisions: [`docs/adr/0001-time-boxed-mvp.md`](docs
 ## Quick start (Windows PowerShell, Python 3.11+, Node 20+)
 
 ```powershell
-python scripts/dev.py setup      # backend venv + pip install, frontend npm install
+python scripts/dev.py setup      # backend venv + pip install, frontend npm install, git secret-scan hook
 python scripts/dev.py doctor     # checks tools, .env and the database connection
 python scripts/dev.py migrate
 python scripts/dev.py seed --reset
 python scripts/dev.py up         # API http://127.0.0.1:8000/api/docs  ·  App http://localhost:5173
 ```
 
-`.env` lives in the repo root and is never committed. Required: `DATABASE_URL` (Supabase **session pooler**,
+`.env` lives in the repo root and is never committed; copy `.env.example` (names only) to start. Every manual
+commit runs a local secret scan (detect-secrets) that blocks keys and `.env` files. Required: `DATABASE_URL` (Supabase **session pooler**,
 port 5432) and `DJANGO_SECRET_KEY`. Optional: `DEMO_PASSWORD`, `EMAIL_HOST`/`EMAIL_PORT` (e.g. Mailpit), `COMPANY_STATE`.
 Without `DATABASE_URL` the backend falls back to a local SQLite file.
 
@@ -43,6 +44,8 @@ Emails (password reset, invoices) are written to `backend/sent_emails/` unless `
 
 ```powershell
 python scripts/dev.py test       # pytest (golden billing regression, auth and isolation negative tests) + frontend build
+python scripts/dev.py test --pg  # also runs the Postgres-only concurrency tests in a throwaway docker container
+python scripts/dev.py lint       # ruff + oxlint
 python scripts/dev.py perf       # times every main endpoint against the configured database
 ```
 

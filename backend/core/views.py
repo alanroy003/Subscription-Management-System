@@ -11,13 +11,36 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from . import reports, services
-from .models import (BillingRun, Customer, Discount, Invoice, Payment, Plan, Product, QuotationTemplate, Subscription,
-                     SubscriptionLine, TaxGroup)
+from .models import (
+    BillingRun,
+    Customer,
+    Discount,
+    Invoice,
+    Payment,
+    Plan,
+    Product,
+    QuotationTemplate,
+    Subscription,
+    SubscriptionLine,
+    TaxGroup,
+)
 from .money import ZERO
 from .permissions import IsTeam, TeamReadAdminWrite
-from .serializers import (BillingRunSerializer, CustomerSerializer, DiscountSerializer, InvoiceListSerializer,
-                          InvoiceSerializer, PaymentSerializer, PlanSerializer, ProductSerializer,
-                          QuotationTemplateSerializer, SubscriptionListSerializer, SubscriptionSerializer, TaxGroupSerializer, build_lines)
+from .serializers import (
+    BillingRunSerializer,
+    CustomerSerializer,
+    DiscountSerializer,
+    InvoiceListSerializer,
+    InvoiceSerializer,
+    PaymentSerializer,
+    PlanSerializer,
+    ProductSerializer,
+    QuotationTemplateSerializer,
+    SubscriptionListSerializer,
+    SubscriptionSerializer,
+    TaxGroupSerializer,
+    build_lines,
+)
 from .services import DomainError
 
 
@@ -107,7 +130,9 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
         if self.action == "list":
             amount = ExpressionWrapper(F("lines__unit_price") * F("lines__quantity"),
                                        output_field=DecimalField(max_digits=16, decimal_places=2))
-            qs = qs.annotate(amount=Coalesce(Sum(amount), Value(ZERO), output_field=DecimalField(max_digits=16, decimal_places=2))).order_by("-id")
+            qs = qs.annotate(
+                amount=Coalesce(Sum(amount), Value(ZERO), output_field=DecimalField(max_digits=16, decimal_places=2))
+            ).order_by("-id")
         else:
             qs = qs.prefetch_related(
                 Prefetch("lines", queryset=SubscriptionLine.objects.select_related("product", "variant")),
@@ -218,7 +243,9 @@ class InvoiceViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.
         return Response({"confirmed": done})
 
 
-class PaymentViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.CreateModelMixin, viewsets.GenericViewSet):
+class PaymentViewSet(
+    mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.CreateModelMixin, viewsets.GenericViewSet
+):
     serializer_class = PaymentSerializer
     search_fields = ["invoice__number", "invoice__customer__name", "note"]
 

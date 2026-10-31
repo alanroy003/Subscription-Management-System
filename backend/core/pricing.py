@@ -137,7 +137,7 @@ def price_lines(lines: list[LineInput], discounts: list, product_scopes: dict, o
                 p.discount = p.discount or best
         used.append(best)
 
-    for p, src in zip(priced, lines):
+    for p, src in zip(priced, lines, strict=True):
         base = p.subtotal - p.discount_amount
         p.taxes = tax_components(base, src.tax_group, customer_state, company_state)
         p.tax_amount = sum((Decimal(t["amount"]) for t in p.taxes), ZERO)

@@ -4,16 +4,24 @@
 !.env.example
 *.pem
 *.key
+*.p12
+*.pfx
+id_rsa*
+credentials*.json
 
 # dependencies and caches
 node_modules/
 .venv/
+venv/
 __pycache__/
 *.pyc
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+.coverage
 coverage/
+htmlcov/
+*.tsbuildinfo
 
 # build and generated output
 dist/
@@ -23,19 +31,31 @@ media/
 *.log
 *.pdf.tmp
 loadtest-results/
+perf-results/
 
-# local data and exports
+# generated documents (invoices, exports); the problem statement PDF stays tracked
+*.pdf
+docs/00-inputs/*.pdf
+
+# local data and exports (may contain personal data)
 *.dump
+*.sql
 *.sql.bak
+*.sql.gz
+*.sqlite3
+*.db
 seed-exports/
+backups/
+
+# local runtime
+backend/sent_emails/
 
 # editor, OS, Claude local settings
 .claude/settings.local.json
+.vscode/
+.idea/
 .DS_Store
 Thumbs.db
 
 
-docs\00-inputs
-# local runtime
-backend/sent_emails/
-backend/*.sqlite3
+docs

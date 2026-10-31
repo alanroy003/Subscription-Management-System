@@ -27,10 +27,22 @@ React + TypeScript + Vite · Django + Django REST Framework · Supabase (Postgre
 - If a step passes 130% of its estimate, stop and tell me.
 
 ## Git and approval protocol
-- `main` is always runnable. One branch per step: `step/S06-billing-engine`.
-- Conventional Commits with the step tag: `feat(billing): add idempotent invoice generation [S6]`.
-- Commit and push after every sub-task whose tests pass.
-- At step end: run tests, lint, regression suite and secret scan; update docs; open a PR; post the Step Report; **stop**.
+- `main` is always runnable. One branch per step: `step/01-repo-hygiene` (step numbers from `docs/01-planning/ROADMAP.md`).
+- Conventional Commits with the step tag, imperative, under 72 chars: `feat(billing): add idempotent invoice generation [S6]`.
+- **Manual commits (since 2026-10-31):** never run `git commit` or `git push` unless I say `COMMIT IT`.
+  Print a **COMMIT CHECKPOINT** and wait when the tree has changes and any trigger is true: a sub-task is done and its
+  tests pass; the last commit is > 30 min old (`git log -1 --format=%cI`) or > ~10 files / 300 lines changed; before a
+  risky change (migration, dependency change, large refactor, merge); at every step end before the Step Report.
+- COMMIT CHECKPOINT (max 12 lines): changed-files summary; checks (tests, ignored-file check, secret scan); then exactly:
+  `git status` · `git add -A` · `git commit -m "<type>(<scope>): <summary> [Sx]" -m "<one-line reason>"` · `git push`.
+- Before every checkpoint run `git status --porcelain` and `git check-ignore -v .env`; nothing sensitive or generated may
+  be staged (no `.env*` except `.env.example`, keys, dumps, logs, build output, dependency folders). If it is: stop,
+  `git rm --cached`, fix `.gitignore`, tell me. If a secret was ever committed, tell me to rotate it. No history rewrite
+  without my approval. Update `.gitignore` in the same change whenever a new tool, folder or generated file appears.
+- My replies: `COMMITTED` (record the hash, continue), `COMMIT IT` (run exactly those commands), `CHANGE MSG: <text>`,
+  `LATER` (ask again at the next trigger, never later than the step end). Never move past a step end with uncommitted work.
+- At step end: run tests, lint, regression suite and secret scan; update docs; print the checkpoint; post the Step Report; **stop**.
+- Start a roadmap step only after my `GO <n>`. On `STOP AND SUBMIT`, follow ROADMAP.md section 6.
 - Merge, tag and start the next step **only** after my exact phrase `APPROVED Sx`.
 - Never force-push `main`. Never run destructive commands (`git reset --hard`, `git clean -fd`, dropping data) without my explicit OK. Migrations must be reversible.
 
