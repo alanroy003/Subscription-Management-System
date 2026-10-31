@@ -8,6 +8,7 @@ import { addDaysISO, date, money, moneyCompact, monthLabel, num, todayISO } from
 import { useAsync } from '../hooks'
 import type { Invoice, SubStatus, Summary } from '../types'
 import { InvoicePill } from './Invoices'
+import { RenewalsCard } from './RenewalsCard'
 
 const STATUS_COLORS: Record<SubStatus, string> = {
   draft: '#9c95a3',
@@ -258,6 +259,9 @@ export function DashboardPage() {
         </Card>
       </div>
 
+      <RenewalsCard />
+
+      <div style={{ height: 16 }} />
       <Card title="Overdue invoices" pad={false} actions={<Link to="/invoices?overdue=true" className="btn btn-sm">View all</Link>}>
         <Table<Invoice>
           rows={s?.top_overdue ?? (loading ? null : [])}

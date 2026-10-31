@@ -21,6 +21,7 @@ router.register("payments", views.PaymentViewSet, basename="payment")
 router.register("billing/runs", views.BillingRunViewSet)
 router.register("integrity/checks", views.IntegrityCheckViewSet)
 router.register("audit-events", views.AuditEventViewSet, basename="audit-event")
+router.register("renewals", views.RenewalViewSet, basename="renewal")
 
 api = [
     path("health", views.health),

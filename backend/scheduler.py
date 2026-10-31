@@ -12,6 +12,7 @@ HOUR = int(os.environ.get("BILLING_HOUR", "2"))
 
 def run():
     subprocess.run(["python", "manage.py", "run_billing"], check=False)
+    subprocess.run(["python", "manage.py", "send_renewal_reminders"], check=False)
     subprocess.run(["python", "manage.py", "reconcile"], check=False)  # emails admins if anything drifted
 
 

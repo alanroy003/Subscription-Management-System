@@ -11,3 +11,4 @@
 | 2026-10-31 | dev-tooling | **Approved** for merge to main (owner runs the merge); next: database integrity | "APPROVED, GO 3" |
 | 2026-10-31 | db-integrity | **Approved** for merge to main (owner runs the merge); next: audit log, plus Swagger as backend documentation | "APPROVED, GO 4 ... Also in this step add the swagger as a back end documentation" |
 | 2026-10-31 | Feature selection | **Approved**: build only 5, 6, 19, 20, 23, 24, 25, S1, S3 in that order; rest parked. gitleaks fix committed (46ca282) | "This is what I wish to implement in the next upcoming following phases ... lets move to the Server-side invoice PDF" |
+| 2026-10-31 | Next features | **Approved**: renewal reminders, then free trial as a 0-rupee trial plan (promo-code layer only if time allows). Invoice PDF committed f98c9b2 | "these are the next two steps" |

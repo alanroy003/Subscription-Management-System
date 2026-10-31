@@ -6,7 +6,7 @@ from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
-from rest_framework import mixins, serializers, status, viewsets
+from rest_framework import filters, mixins, serializers, status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import AllowAny
@@ -46,6 +46,7 @@ from .serializers import (
     SubscriptionListSerializer,
     SubscriptionSerializer,
     TaxGroupSerializer,
+    UpcomingRenewalSerializer,
     build_lines,
 )
 from .services import DomainError
@@ -420,3 +421,43 @@ class AuditEventViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewse
         if p.get("date_to"):
             qs = qs.filter(at__date__lte=p["date_to"])
         return qs
+
+
+class RenewalViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
+    """Subscriptions expiring soon and the renewal reminders already sent for them (team only)."""
+
+    queryset = Subscription.objects.all()
+    serializer_class = UpcomingRenewalSerializer
+    permission_classes = [IsTeam]
+    search_fields = ["number", "customer__name"]
+    filter_backends = [filters.SearchFilter]
+
+    def get_queryset(self):
+        from .renewals import WINDOW_DAYS, upcoming
+
+        try:
+            days = min(max(int(self.request.query_params.get("days", WINDOW_DAYS)), 0), 365)
+        except ValueError:
+            days = WINDOW_DAYS
+        return upcoming(days=days).prefetch_related("renewal_reminders")
+
+    @extend_schema(
+        summary="List subscriptions expiring soon",
+        parameters=[OpenApiParameter("days", OpenApiTypes.INT, description="Look-ahead window, default 30")],
+    )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+
+    @extend_schema(
+        summary="Send due renewal reminders now",
+        description="Sends the 30/7/1-day reminders due today. Safe to repeat: a reminder is never sent twice.",
+        request=None,
+        responses=inline_serializer("ReminderRun", {
+            "sent": serializers.IntegerField(), "skipped": serializers.IntegerField(),
+            "reminders": serializers.ListField(child=serializers.DictField())}),
+    )
+    @action(detail=False, methods=["post"], url_path="send-reminders")
+    def send_reminders(self, request):
+        from .renewals import send_due_reminders
+
+        return Response(send_due_reminders(user=request.user).as_dict())

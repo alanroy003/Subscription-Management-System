@@ -355,6 +355,27 @@ class BillingRun(models.Model):
         ordering = ["-id"]
 
 
+class RenewalReminder(models.Model):
+    """One reminder sent for one subscription expiry. Unique per (subscription, expiry date, days before), so the
+    daily job can run any number of times without repeating itself; renewing sets a new expiry date and therefore
+    starts a fresh set of reminders."""
+
+    THRESHOLDS = (30, 7, 1)
+
+    subscription = models.ForeignKey(Subscription, on_delete=models.CASCADE, related_name="renewal_reminders")
+    expiry_date = models.DateField()
+    days_before = models.PositiveSmallIntegerField()
+    sent_at = models.DateTimeField(auto_now_add=True)
+    sent_to = models.JSONField(default=list, help_text="Email addresses the reminder went to")
+
+    class Meta:
+        ordering = ["-sent_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["subscription", "expiry_date", "days_before"],
+                                    name="uniq_renewal_reminder"),
+        ]
+
+
 class AuditEvent(models.Model):
     """Append-only record of a sensitive action (see core/audit.py). Also the outbox for webhooks and alerts:
     `published_at` is the only column that may change after insert."""
