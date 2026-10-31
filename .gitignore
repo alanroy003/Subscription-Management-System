@@ -36,3 +36,6 @@ Thumbs.db
 
 
 docs\00-inputs
+# local runtime
+backend/sent_emails/
+backend/*.sqlite3
