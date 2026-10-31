@@ -1,7 +1,6 @@
 name: CI
 on:
   push:
-    branches: [main, "step/**"]
   pull_request:
 
 jobs:
