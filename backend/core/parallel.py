@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from django.db import connection, connections
 
-_executor = ThreadPoolExecutor(max_workers=6, thread_name_prefix="db-par")
+_executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="db-par")
 
 
 def _wrap(fn):

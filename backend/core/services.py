@@ -27,14 +27,16 @@ class DomainError(Exception):
 
 
 def next_number(prefix: str, on: date | None = None) -> str:
+    """Gap-free per prefix and year: one atomic upsert, the row stays locked until the caller commits."""
+    from django.db import connection
     year = (on or date.today()).year
     key = f"{prefix}-{year}"
-    with transaction.atomic():
-        seq, _ = Sequence.objects.select_for_update().get_or_create(key=key)
-        seq.value = F("value") + 1
-        seq.save(update_fields=["value"])
-        seq.refresh_from_db()
-    return f"{key}-{seq.value:05d}"
+    table = Sequence._meta.db_table
+    with connection.cursor() as cur:
+        cur.execute(f"INSERT INTO {table} (key, value) VALUES (%s, 1) "
+                    f"ON CONFLICT (key) DO UPDATE SET value = {table}.value + 1 RETURNING value", [key])
+        value = cur.fetchone()[0]
+    return f"{key}-{value:05d}"
 
 
 # ---------------------------------------------------------------- subscription lifecycle
@@ -160,11 +162,21 @@ def _period_end(sub: Subscription, period_start: date) -> date:
     return next_period_start(period_start, sub.plan.billing_period, sub.start_date) - timedelta(days=1)
 
 
-def create_invoice(sub: Subscription, period_start: date) -> Invoice:
-    """Create the invoice for one period. Caller holds the subscription lock. Idempotent per (sub, period)."""
-    existing = Invoice.objects.filter(subscription=sub, period_start=period_start).first()
-    if existing:
-        return existing
+def load_discounts() -> tuple[list, dict]:
+    discounts = list(Discount.objects.filter(is_active=True))
+    scopes: dict[int, set] = {}
+    for d_id, p_id in Discount.products.through.objects.filter(discount__in=discounts).values_list("discount_id", "product_id"):
+        scopes.setdefault(d_id, set()).add(p_id)
+    return discounts, scopes
+
+
+def create_invoice(sub: Subscription, period_start: date, catalog: tuple | None = None, claim: bool = True) -> Invoice:
+    """Create the invoice for one period. Caller holds the subscription lock.
+
+    The unique (subscription, period_start) constraint makes a second invoice for the same period impossible.
+    `catalog` is the (discounts, scopes) pair, loaded once per billing run; usage limits are enforced atomically
+    when claimed, so a stale cached count can never over-apply a discount.
+    """
     customer: Customer = sub.customer
     lines = list(sub.lines.select_related("product", "variant", "tax_group", "product__tax_group"))
     if not lines:
@@ -179,20 +191,18 @@ def create_invoice(sub: Subscription, period_start: date) -> Invoice:
         )
         for l in lines
     ]
-    discounts = list(Discount.objects.filter(is_active=True))
-    scopes: dict[int, set] = {}
-    for d_id, p_id in Discount.products.through.objects.filter(discount__in=discounts).values_list("discount_id", "product_id"):
-        scopes.setdefault(d_id, set()).add(p_id)
+    discounts, scopes = catalog or load_discounts()
     while True:
         priced = price_lines(inputs, discounts, scopes, period_start, customer.state, settings.COMPANY["state"])
-        exhausted = _claim_discounts(priced.discounts_used)
+        # A dry run never writes usage counts (it is rolled back anyway); it prices against the cached counts.
+        exhausted = _claim_discounts(priced.discounts_used) if claim else None
         if exhausted is None:
             break
         discounts = [d for d in discounts if d.pk != exhausted]  # lost a race for the last use: price without it
 
     invoice_date = max(period_start, sub.start_date)
     invoice = Invoice.objects.create(
-        number=f"TMP-{sub.pk}-{period_start:%Y%m%d}",
+        number=f"DRAFT-{sub.pk}-{period_start:%Y%m%d}",  # final number assigned just before commit
         subscription=sub,
         customer=customer,
         customer_snapshot={"name": customer.name, "email": customer.email, "address": customer.address,
@@ -213,9 +223,6 @@ def create_invoice(sub: Subscription, period_start: date) -> Invoice:
                     discount_amount=p.discount_amount, taxes=p.taxes, tax_amount=p.tax_amount, total=p.total)
         for p in priced.lines
     ])
-    # Numbered last so the gap-free sequence lock is held as briefly as possible.
-    invoice.number = next_number("INV", invoice_date)
-    invoice.save(update_fields=["number"])
     return invoice
 
 
@@ -226,6 +233,13 @@ def _claim_discounts(used: list) -> int | None:
     class _Exhausted(Exception):
         pass
 
+    if not used:
+        return None
+    if len(used) == 1:  # a single conditional UPDATE is already atomic; no savepoint round trips needed
+        d = used[0]
+        claimed = Discount.objects.filter(Q(usage_limit__isnull=True) | Q(used_count__lt=F("usage_limit")),
+                                          pk=d.pk).update(used_count=F("used_count") + 1)
+        return None if claimed else d.pk
     try:
         with transaction.atomic():  # savepoint: all claims or none
             for d in used:
@@ -238,10 +252,10 @@ def _claim_discounts(used: list) -> int | None:
     return None
 
 
-def bill_subscription(sub_id: int, as_of: date) -> list[BillItem]:
-    """Bill every due period up to `as_of` (catch-up). Runs in its own transaction."""
+def bill_subscription(sub_id: int, as_of: date, catalog: tuple | None = None, assign_numbers: bool = True) -> list[BillItem]:
+    """Bill every due period up to `as_of` (catch-up). Runs in its own transaction (no savepoint when nested)."""
     items = []
-    with transaction.atomic():
+    with transaction.atomic(savepoint=False):
         sub = Subscription.objects.select_for_update().select_related("plan", "customer").get(pk=sub_id)
         if sub.status == S.CONFIRMED and sub.start_date <= as_of:
             old = sub.status
@@ -250,13 +264,23 @@ def bill_subscription(sub_id: int, as_of: date) -> list[BillItem]:
             _log(sub, old, None, "Started by billing run")
             items.append(BillItem(sub.number, sub.start_date, ZERO, "activated"))
         if sub.status == S.ACTIVE:
+            billed_from = sub.next_invoice_date
+            created = []
             while sub.next_invoice_date and sub.next_invoice_date <= as_of:
                 if sub.expiry_date and sub.next_invoice_date >= sub.expiry_date:
                     break
-                inv = create_invoice(sub, sub.next_invoice_date)
-                items.append(BillItem(sub.number, inv.period_start, inv.total, "created", invoice_number=inv.number))
+                created.append(create_invoice(sub, sub.next_invoice_date, catalog, claim=assign_numbers))
                 sub.next_invoice_date = next_period_start(sub.next_invoice_date, sub.plan.billing_period, sub.start_date)
-            sub.save(update_fields=["next_invoice_date"])
+            if sub.next_invoice_date != billed_from:
+                sub.save(update_fields=["next_invoice_date"])
+            # Gap-free numbers last, so the sequence row lock is held for the fewest round trips.
+            for inv in created:
+                if assign_numbers:
+                    inv.number = next_number("INV", inv.invoice_date)
+                    Invoice.objects.filter(pk=inv.pk).update(number=inv.number)
+                else:
+                    inv.number = "(preview)"
+                items.append(BillItem(sub.number, inv.period_start, inv.total, "created", invoice_number=inv.number))
         if sub.status in (S.ACTIVE, S.PAUSED) and sub.plan.auto_close and sub.expiry_date and sub.expiry_date <= as_of:
             old = sub.status
             sub.status, sub.closed_at = S.CLOSED, sub.expiry_date
@@ -286,7 +310,7 @@ def run_billing(as_of: date | None = None, dry_run: bool = False, user=None) -> 
         # Each subscription commits on its own (failure isolation); a dry run rolls its own transaction back.
         try:
             with transaction.atomic():
-                result = bill_subscription(sub_id, as_of)
+                result = bill_subscription(sub_id, as_of, catalog, assign_numbers=not dry_run)
                 if dry_run:
                     transaction.set_rollback(True)
                 return result
@@ -294,6 +318,7 @@ def run_billing(as_of: date | None = None, dry_run: bool = False, user=None) -> 
             number = Subscription.objects.filter(pk=sub_id).values_list("number", flat=True).first() or str(sub_id)
             return [BillItem(number, as_of, ZERO, "failed", error=str(exc)[:300])]
 
+    catalog = load_discounts()
     items: list[BillItem] = [i for batch in map_parallel(one, list(due)) for i in batch]
 
     run = BillingRun.objects.create(
@@ -307,8 +332,10 @@ def run_billing(as_of: date | None = None, dry_run: bool = False, user=None) -> 
 
 def models_q_due(as_of: date):
     from django.db.models import Q
+    # An expired subscription (next period at or past expiry) has nothing left to bill until it is renewed.
+    not_expired = Q(expiry_date__isnull=True) | Q(expiry_date__gt=F("next_invoice_date"))
     return (
-        Q(status=S.ACTIVE, next_invoice_date__lte=as_of)
+        (Q(status=S.ACTIVE, next_invoice_date__lte=as_of) & not_expired)
         | Q(status=S.CONFIRMED, start_date__lte=as_of)
         | Q(plan__auto_close=True, expiry_date__lte=as_of)
     )

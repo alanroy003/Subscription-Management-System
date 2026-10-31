@@ -1,0 +1,92 @@
+:root {
+  /* Brand */
+  --brand: #714b67;
+  --brand-600: #5f3f57;
+  --brand-700: #4d3347;
+  --brand-50: #f6f0f4;
+  --brand-100: #ecdfe8;
+  --accent: #017e84;
+  --accent-600: #016a6f;
+  --accent-50: #e6f4f4;
+
+  /* Neutrals */
+  --bg: #f4f3f6;
+  --surface: #ffffff;
+  --surface-2: #faf9fb;
+  --surface-sunken: #efedf1;
+  --border: #e3e0e6;
+  --border-strong: #cfcad4;
+  --text: #1f1a22;
+  --text-2: #4f4855;
+  --text-3: #6b6472;
+  --text-inverse: #ffffff;
+
+  /* Sidebar */
+  --side-bg: #2b1f29;
+  --side-text: #d9cdd6;
+  --side-text-dim: #a8979f;
+  --side-hover: #3a2a37;
+  --side-active: #4a3446;
+
+  /* Semantic */
+  --success: #1f7a4d;
+  --success-bg: #e3f4ea;
+  --warning: #8a5a00;
+  --warning-bg: #fdf1d8;
+  --danger: #b42318;
+  --danger-bg: #fdeceb;
+  --info: #175cd3;
+  --info-bg: #e8f0fd;
+  --neutral: #4f4855;
+  --neutral-bg: #eeecf0;
+
+  /* Chart */
+  --chart-1: #714b67;
+  --chart-2: #017e84;
+  --chart-3: #e0a030;
+  --chart-4: #9c8fa0;
+
+  /* Type */
+  --font: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --mono: ui-monospace, 'Cascadia Code', 'SF Mono', Consolas, monospace;
+  --fs-xs: 0.75rem;
+  --fs-sm: 0.8125rem;
+  --fs-md: 0.875rem;
+  --fs-lg: 1rem;
+  --fs-xl: 1.25rem;
+  --fs-2xl: 1.5rem;
+  --fs-3xl: 1.875rem;
+
+  /* Space and shape */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 20px;
+  --s6: 24px;
+  --s8: 32px;
+  --r-sm: 6px;
+  --r: 8px;
+  --r-lg: 12px;
+  --r-pill: 999px;
+
+  --shadow-sm: 0 1px 2px rgba(31, 26, 34, 0.06);
+  --shadow: 0 1px 3px rgba(31, 26, 34, 0.08), 0 4px 12px rgba(31, 26, 34, 0.05);
+  --shadow-lg: 0 12px 40px rgba(31, 26, 34, 0.18);
+  --ring: 0 0 0 3px rgba(113, 75, 103, 0.28);
+
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --t-fast: 120ms;
+  --t: 200ms;
+  --t-slow: 280ms;
+
+  --sidebar-w: 240px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --t-fast: 0ms;
+    --t: 0ms;
+    --t-slow: 0ms;
+  }
+}

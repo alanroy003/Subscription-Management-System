@@ -138,6 +138,8 @@ class UserSerializer(serializers.ModelSerializer):
         return _check_email(value)
 
     def validate_role(self, value):
+        if self.instance is not None and self.instance.role == User.Role.CUSTOMER and value == User.Role.CUSTOMER:
+            return value
         if value not in (User.Role.STAFF, User.Role.ADMIN):
             raise serializers.ValidationError("Only staff or admin users are created here.")
         return value
@@ -149,8 +151,24 @@ class UserSerializer(serializers.ModelSerializer):
     def create(self, data):
         return User.objects.create_user(data.pop("email"), data.pop("password"), **data)
 
+    def update(self, user, data):
+        data.pop("email", None)
+        password = data.pop("password", None)
+        user = super().update(user, data)
+        if password:
+            user.set_password(password)
+            user.save(update_fields=["password"])
+        return user
 
-class UserViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, viewsets.GenericViewSet):
+    def get_fields(self):
+        fields = super().get_fields()
+        if self.instance is not None:
+            fields["password"].required = False
+            fields["email"].read_only = True
+        return fields
+
+
+class UserViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, mixins.UpdateModelMixin, viewsets.GenericViewSet):
     """Only the admin can add internal staff."""
 
     queryset = User.objects.order_by("role", "email")

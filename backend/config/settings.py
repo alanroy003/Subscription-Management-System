@@ -77,7 +77,7 @@ if TESTING or not os.environ.get("DATABASE_URL"):
 else:
     # The pooler is ~200 ms away, so a client-side pool avoids a TLS handshake per request.
     DATABASES = {"default": dj_database_url.parse(os.environ["DATABASE_URL"], conn_max_age=0, ssl_require=True)}
-    DATABASES["default"].setdefault("OPTIONS", {})["pool"] = {"min_size": 2, "max_size": 10, "timeout": 20}
+    DATABASES["default"].setdefault("OPTIONS", {})["pool"] = {"min_size": 4, "max_size": 12, "timeout": 20}
 
 AUTH_USER_MODEL = "accounts.User"
 AUTH_PASSWORD_VALIDATORS = [{"NAME": "accounts.validators.BrightloopPasswordValidator"}]
