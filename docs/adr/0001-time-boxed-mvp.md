@@ -17,8 +17,8 @@ Option 2:
 | Area | Decision | Trade-off |
 |---|---|---|
 | Auth | Django auth (email as username) + DRF token auth; policy enforced server-side; reset link via Django email | Supabase Auth unused. Removes JWT/JWKS wiring and the "Supabase mail cannot reach local Mailpit" problem |
-| Database | Supabase Postgres, **session pooler** (`DATABASE_URL`, port 5432), psycopg 3 client pool (`OPTIONS.pool`, 2 to 10) | The transaction pooler (6543) is not used: Django needs session state |
-| Latency | Read endpoints are 2 to 4 queries; dashboard runs 9 aggregates in parallel; billing run bills subscriptions in parallel, each in its own transaction | Measured p95 under 1 s for every endpoint (`scripts/perf_check.py`) |
+| Database | Supabase Postgres, **session pooler** (`DATABASE_URL`, port 5432), psycopg 3 client pool (`OPTIONS.pool`, 4 to 12) | The transaction pooler (6543) is not used: Django needs session state |
+| Latency | Read endpoints are 2 to 4 queries; dashboard runs 9 aggregates in parallel; billing run bills subscriptions in parallel, each in its own transaction | At 10k subscriptions / 75k invoices every endpoint p95 is under 1.6 s (`scripts/perf_check.py`) |
 | RLS | Enabled on every public table with no policies (migration `core/0002`), so the Supabase Data API with the publishable key sees nothing. Django (table owner) is not restricted; customer isolation is enforced in querysets with negative tests | Not per-customer RLS policies |
 | Scheduler | `manage.py run_billing` + "Run billing" button with dry run; `scheduler` service in Docker Compose runs it daily | Plain loop, no Postgres advisory lock: run one scheduler only (billing is idempotent anyway) |
 | Email | SMTP if `EMAIL_HOST` is set (Mailpit), else files in `backend/sent_emails/` | |
