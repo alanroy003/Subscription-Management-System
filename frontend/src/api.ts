@@ -140,6 +140,36 @@ export async function request<T>(method: string, path: string, body?: unknown): 
   return data as T
 }
 
+/** Downloads a file (e.g. an invoice PDF) with the signed-in user's token and saves it under `filename`. */
+export async function downloadFile(path: string, filename: string): Promise<void> {
+  const headers: Record<string, string> = { Accept: 'application/pdf, application/json' }
+  const token = tokenStore.get()
+  if (token) headers.Authorization = `Token ${token}`
+  let res: Response
+  try {
+    res = await fetch(url(path), { headers })
+  } catch {
+    throw new ApiError(0, 'Cannot reach the server. Check that the backend is running.')
+  }
+  if (!res.ok) {
+    let data: unknown = null
+    try {
+      data = await res.json()
+    } catch {
+      data = null
+    }
+    throw parseError(res.status, data ?? { detail: 'The file could not be downloaded.' })
+  }
+  const href = URL.createObjectURL(await res.blob())
+  const a = document.createElement('a')
+  a.href = href
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  window.setTimeout(() => URL.revokeObjectURL(href), 1000)
+}
+
 /** Normalises list responses: accepts paginated objects or bare arrays. */
 function toPage<T>(data: Page<T> | T[]): Page<T> {
   if (Array.isArray(data)) return { count: data.length, next: null, previous: null, results: data }

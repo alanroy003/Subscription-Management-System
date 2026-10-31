@@ -10,6 +10,7 @@ from rest_framework import mixins, serializers, status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import AllowAny
+from rest_framework.renderers import BaseRenderer, JSONRenderer
 from rest_framework.response import Response
 
 from . import audit, reports, services
@@ -218,6 +219,24 @@ class SubscriptionViewSet(audit.AuditedModelViewSetMixin, viewsets.ModelViewSet)
         return Response(self.get_serializer(self.get_queryset().get(pk=sub.pk)).data)
 
 
+class PdfRenderer(BaseRenderer):
+    """Lets clients ask for `Accept: application/pdf` on the PDF download."""
+
+    media_type = "application/pdf"
+    format = "pdf"
+    charset = None
+    render_style = "binary"
+
+    def render(self, data, accepted_media_type=None, renderer_context=None):
+        if isinstance(data, bytes | bytearray):
+            return data
+        import json  # an error payload (403, 404) is still sent as readable JSON
+
+        if renderer_context and renderer_context.get("response") is not None:
+            renderer_context["response"]["Content-Type"] = "application/json"
+        return json.dumps(data).encode()
+
+
 class InvoiceViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
     queryset = Invoice.objects.all()
     search_fields = ["number", "customer__name", "subscription__number"]
@@ -244,6 +263,29 @@ class InvoiceViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.
         if p.get("date_to"):
             qs = qs.filter(invoice_date__lte=p["date_to"])
         return qs
+
+    @extend_schema(
+        summary="Download the invoice as a PDF",
+        description="Rendered from the invoice's stored snapshot. Add `?inline=1` to open it in the browser instead "
+                    "of downloading. Customers can download their own issued invoices.",
+        parameters=[OpenApiParameter("inline", OpenApiTypes.BOOL)],
+        responses={(200, "application/pdf"): OpenApiTypes.BINARY},
+    )
+    @action(detail=True, methods=["get"], renderer_classes=[JSONRenderer, PdfRenderer])
+    def pdf(self, request, pk=None):
+        from django.http import HttpResponse
+
+        from .pdf import PdfError, invoice_filename, render_invoice_pdf
+
+        invoice = self.get_object()  # customers only reach their own, non-draft invoices
+        try:
+            data = render_invoice_pdf(invoice)
+        except PdfError as exc:
+            raise ValidationError({"detail": str(exc)})
+        disposition = "inline" if request.query_params.get("inline") in ("1", "true") else "attachment"
+        response = HttpResponse(data, content_type="application/pdf")
+        response["Content-Disposition"] = f'{disposition}; filename="{invoice_filename(invoice)}"'
+        return response
 
     def _act(self, fn):
         if not self.request.user.is_team:

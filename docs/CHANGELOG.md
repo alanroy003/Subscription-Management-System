@@ -1,6 +1,9 @@
 # Changelog
 
 ## Unreleased
+- Invoice PDF: server-rendered tax invoice (GST breakdown, place of supply, payments, balance, Indian digit grouping)
+  from the invoice's stored snapshot; `GET /api/v1/invoices/{id}/pdf` (customers: own issued invoices only; staff can
+  preview drafts); attached automatically to invoice emails; Download PDF button for staff and in the customer portal.
 - Step 1: hardened `.gitignore` (generated PDFs, local databases, dumps, credentials), local pre-commit secret scan
   (detect-secrets) that also blocks `.env` files, `.env.example`, `dev.py hooks`, and a `dev.py doctor` that checks `.env`
   names, settings module, pooler type and hook installation without printing values.
