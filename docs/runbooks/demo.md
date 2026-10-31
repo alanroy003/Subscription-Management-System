@@ -1,23 +1,29 @@
-# Demo script (about 5 minutes)
+# Demo script (about 7 minutes)
 
-Before: `python scripts/dev.py seed --reset`, then `python scripts/dev.py up`. Open http://localhost:5173.
+Before: `python scripts/dev.py seed --reset`, then `python scripts/dev.py up`. Open http://localhost:5173/login.
+Logins: `admin@brightloop.test`, `staff@brightloop.test`, `customer@brightloop.test`; `DEMO_PASSWORD` in `.env` (or
+the seed default in `backend/core/management/commands/seed.py`) signs in all three. Emails land in `backend/sent_emails/`.
 
-1. **Sign-up (30 s).** `/signup`: try `password` → the live checklist and the server reject it. Use a strong one →
-   lands in the customer portal. Sign up again with the same email → "already exists".
-2. **Admin sets up (60 s).** Log in as `admin@brightloop.test`. Products → *Brightloop CRM*: variant *Brand: Odoo*
-   +560 (price 1,560). Plans → *CRM Monthly*: monthly, pausable, renewable. Discounts → *Volume 10% (5+ seats)*,
-   usage count visible. Users → add a staff member (only the admin sees this page).
-3. **Quote to subscription (60 s).** Log in as `staff@brightloop.test`. Subscriptions → New → from template
-   *CRM Starter (Odoo)* for *Acme Traders* → status Quotation, valid 30 days. Confirm → Active; timeline shows each
-   step; the first invoice exists already (billing in advance).
-4. **Billing day (45 s).** Billing → Dry run (8 subscriptions due today, nothing saved) → Run now → 8 invoices.
-   Run now again → 0 created (never billed twice).
-5. **Invoice and payment (45 s).** Open a new invoice: lines with discount and CGST/SGST (or IGST for other states).
-   Confirm → Send (email file in `backend/sent_emails/`) → Print. Record a partial payment → still outstanding;
-   record the rest → Paid.
-6. **Finance lead (45 s).** Dashboard: active subscriptions, MRR, billed vs collected chart, overdue table,
-   renewals and 30/60/90-day forecast, at-risk customers. Change the date range.
-7. **Customer portal (30 s).** Log in as `customer@brightloop.test`: only Acme's subscriptions and invoices; pause
-   or renew where the plan allows; print an invoice.
+1. **Sign-up and free trial (45 s).** `/signup`: a weak password fails the live checklist and the server. A strong one
+   lands in the portal with a **30-day free trial already running** and a 0 invoice marked Paid. Signing up again with
+   the same email says "already exists".
+2. **Admin sets up (60 s).** As admin: Products → *Brightloop CRM*, variant *Brand: Odoo* +560. Plans → *CRM Monthly*
+   and *Free Trial (30 days)* (trial toggle). Discounts → *Volume 10% (5+ seats)*. Users → add staff (admin only).
+3. **Quote to subscription (60 s).** As staff: Subscriptions → New → *From quotation template* → *CRM Starter (Odoo)*
+   for *Acme Traders* → Quotation, valid 30 days → **Confirm** → Active; the timeline shows each step and the first
+   invoice already exists.
+4. **Billing day (45 s).** Billing runs → **Dry run** (8 due, nothing saved) → **Run now** (8 invoices) → **Run now**
+   again (0: never billed twice). The *Data integrity* card says all figures reconcile.
+5. **Invoice, PDF and payment (60 s).** Open a new invoice: discount and CGST/SGST (IGST out of state). **Confirm** →
+   **Download PDF** → **Send by email** (PDF attached). Record a partial payment, then the rest → **Paid**.
+6. **Renewals (30 s).** Dashboard → *Upcoming renewals*: countdowns and 30d / 7d / 1d badges → **Send due reminders**
+   → badges fill in; press again → nothing resent. The reminder shows on the subscription timeline.
+7. **Finance lead (30 s).** Dashboard KPIs (MRR, ARPU, churn, billed vs collected, overdue, forecast, at-risk); switch
+   the date range.
+8. **Customer portal (45 s).** As `customer@brightloop.test`: only Acme's data. Banner → **Start free trial** → 30 days
+   left → **Choose a plan** → *CRM Monthly* → a paid subscription starting the day the trial ends. Download an invoice
+   PDF; pause a monthly plan.
+9. **Trust and integration (30 s).** Admin → *Audit log* (every action above, who, how, from where). *API docs*
+   (Swagger) → Authorize with an API key → `GET /api/v1/invoices`.
 
-Recovery: `python scripts/dev.py seed --reset` rebuilds the demo data in about 15 seconds.
+Recovery: `python scripts/dev.py seed --reset` rebuilds the demo data in about 20 seconds.

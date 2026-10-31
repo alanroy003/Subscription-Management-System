@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.1.0 (2026-10-31, hackathon submission)
 - Free trial: plans can be marked as a free trial (price 0, length in days); new sign-ups get it automatically
   (`TRIAL_ON_SIGNUP`), customers can start it from the portal and staff for any customer; one trial per customer,
   enforced everywhere; its 0 invoice is settled at once; it closes itself; Convert to paid plan creates the paid

@@ -4,6 +4,9 @@ One system for products, plans, quotations, subscriptions, recurring invoices, d
 portal and finance reporting. Built for the "Subscription Management System" problem statement
 (`docs/00-inputs/Subscription_Management_System.pdf`).
 
+**Hackathon submission v1.1.0:** start with [`SUBMISSION.md`](SUBMISSION.md) and the 7-minute demo in
+[`docs/runbooks/demo.md`](docs/runbooks/demo.md).
+
 **Stack:** React + TypeScript + Vite · Django 5 + Django REST Framework · Supabase PostgreSQL (session pooler) ·
 GitHub Actions. Architecture decisions: [`docs/adr/0001-time-boxed-mvp.md`](docs/adr/0001-time-boxed-mvp.md).
 

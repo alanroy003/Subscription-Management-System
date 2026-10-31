@@ -1,28 +1,24 @@
 # Handoff
 
 ## Where we are
-Time-boxed MVP (owner: solo, deadline 2026-10-31 16:30 IST, all decisions delegated to Claude). Every PDF scene and the
-Wow Pack public API are built, tested (25 backend tests) and checked in the browser against Supabase. `main` is pushed.
+v1.1.0 hackathon submission (2026-10-31). Branch `submission` holds the final state (built on `free-trial`).
+Every PDF scene plus invoice PDFs, renewal reminders, free trials, database integrity, audit log, API docs and the
+public API are built, tested (SQLite 69 + 7 skipped, Postgres 76) and demoed against Supabase.
 
 ## Approvals
-Stage 0 and step gates waived by the owner on 2026-10-31 10:07 (see `APPROVAL_LOG.md`).
+All owner approvals are in `docs/APPROVAL_LOG.md`. Commits are made by the owner (CLAUDE.md).
 
 ## NEXT ACTION
-Owner says `GO 1` to start step 1 of `docs/01-planning/ROADMAP.md`. `STOP AND SUBMIT` triggers the wrap-up in its section 6. Commits are manual (CLAUDE.md).
+Owner merges `submission` into `main` (pull request) and tags `v1.1.0-submission`. Optional after the hackathon:
+fix the SQLite "adds up" check (`docs/BACKLOG_PARKED.md`), run Docker Compose, move Supabase to ap-south-1.
 
 ## Decisions already made (do not re-ask)
-ADR 0001: Django token auth (not Supabase Auth), session pooler + psycopg pool, RLS on/no policies, browser print for
-PDF, file email backend unless `EMAIL_HOST`, SQLite tests, gap-free numbering, parallel billing per subscription.
-
-## Open questions for the owner
-1. (Owner action, approved D5) Move the Supabase project to `ap-south-1` when convenient, then update `DATABASE_URL`.
-2. None blocking. Roadmap decisions D1 to D5 are approved.
+ADR 0001 (Django auth, session pooler, RLS on, browser print), ADR 0002 (database money rules, reconciliation),
+ADR 0003 (xhtml2pdf for PDFs). Feature order chosen by the owner: see APPROVAL_LOG.
 
 ## Commands
-`python scripts/dev.py up | test | perf | seed --reset | billing --dry-run` · `docker compose up --build`
+`python scripts/dev.py setup | doctor | up | test [--pg] | lint | seed --reset | perf` ·
+`python backend/manage.py run_billing | send_renewal_reminders | reconcile`
 
 ## Read first
-`README.md`, `docs/01-planning/mvp-plan.md`, `docs/adr/0001-time-boxed-mvp.md`, `backend/core/services.py`.
-
-## Reminders
-Demo logins are the seeded `@brightloop.test` users; password is `DEMO_PASSWORD` or the seed default. Never commit `.env`.
+`SUBMISSION.md`, `README.md`, `docs/runbooks/demo.md`, `backend/core/services.py`.

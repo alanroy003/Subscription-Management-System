@@ -120,7 +120,7 @@ export function TrialBanner({ onChanged }: { onChanged: () => void }) {
     return (
       <div className="alert alert-info row wrap" style={{ justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
         <span>
-          <strong>Try {t.plan.name} free for {t.plan.days} days.</strong> No payment needed; it ends on its own.
+          <strong>Start your free {t.plan.days}-day trial.</strong> No payment needed, and it ends on its own.
         </span>
         <Button variant="primary" icon={<Icon.play />} loading={busy} onClick={start}>
           Start free trial
