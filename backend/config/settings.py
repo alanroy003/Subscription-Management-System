@@ -110,6 +110,7 @@ REST_FRAMEWORK = {
     "DEFAULT_FILTER_BACKENDS": ["rest_framework.filters.SearchFilter", "rest_framework.filters.OrderingFilter"],
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "COERCE_DECIMAL_TO_STRING": True,
+    "EXCEPTION_HANDLER": "core.exceptions.exception_handler",
 }
 SPECTACULAR_SETTINGS = {
     "TITLE": "Brightloop Subscription Management API",

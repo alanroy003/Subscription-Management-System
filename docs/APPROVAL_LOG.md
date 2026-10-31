@@ -8,3 +8,4 @@
 | 2026-10-31 10:58 | Roadmap | `docs/01-planning/ROADMAP.md` written as PLAN only; steps start on `GO <step>` | "just plan it and after that we can execute" |
 | 2026-10-31 | Roadmap decisions D1 to D5 | **Approved**: all recommended defaults (vendor-side platform, single company first, keep Django auth, Razorpay test mode, move Supabase to ap-south-1 when convenient) | "I will go with the recommended defaults ... let's go with what you have recommended" |
 | 2026-10-31 | Working mode | Continuous step-by-step build (steps 1 to 37, then stretch) until the owner says `STOP AND SUBMIT`; then run the wrap-up procedure in ROADMAP.md section 6 | "if I want to stop it at any moment I will give you that instruction ... make it as ready and we can submit the hackathon" |
+| 2026-10-31 | dev-tooling | **Approved** for merge to main (owner runs the merge); next: database integrity | "APPROVED, GO 3" |

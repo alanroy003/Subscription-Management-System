@@ -1,4 +1,4 @@
-"""Scheduler loop for Docker: runs the billing day once a day at BILLING_HOUR (local time) and on start-up.
+"""Scheduler loop for Docker: runs the billing day, then the data reconciliation, daily at BILLING_HOUR and on start-up.
 
 Billing is idempotent and catches up missed days, so restarts or double runs never bill twice.
 """
@@ -12,6 +12,7 @@ HOUR = int(os.environ.get("BILLING_HOUR", "2"))
 
 def run():
     subprocess.run(["python", "manage.py", "run_billing"], check=False)
+    subprocess.run(["python", "manage.py", "reconcile"], check=False)  # emails admins if anything drifted
 
 
 run()

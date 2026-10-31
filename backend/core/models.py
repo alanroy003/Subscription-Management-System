@@ -9,6 +9,14 @@ from .money import ZERO
 MONEY = {"max_digits": 14, "decimal_places": 2, "default": ZERO}
 
 
+def check(name: str, condition: models.Q) -> models.CheckConstraint:
+    """A database-level rule: the row is rejected by Postgres (and SQLite) if `condition` is false."""
+    return models.CheckConstraint(condition=condition, name=name)
+
+
+Q, F = models.Q, models.F
+
+
 class Customer(models.Model):
     name = models.CharField(max_length=200)
     email = models.EmailField(db_index=True)
@@ -58,6 +66,7 @@ class Product(models.Model):
 
     class Meta:
         ordering = ["name"]
+        constraints = [check("product_prices_not_negative", Q(sales_price__gte=0, cost_price__gte=0))]
 
     def __str__(self):
         return self.name
@@ -101,6 +110,15 @@ class Plan(models.Model):
 
     class Meta:
         ordering = ["name"]
+        constraints = [
+            check("plan_price_not_negative", Q(price__gte=0)),
+            check(
+                "plan_availability_in_order",
+                Q(available_from__isnull=True)
+                | Q(available_to__isnull=True)
+                | Q(available_to__gte=F("available_from")),
+            ),
+        ]
 
     def __str__(self):
         return self.name
@@ -132,6 +150,16 @@ class Discount(models.Model):
     scope = models.CharField(max_length=10, choices=Scope.choices, default=Scope.ALL)
     products = models.ManyToManyField(Product, blank=True)
     is_active = models.BooleanField(default=True)
+
+    class Meta:
+        constraints = [
+            check("discount_value_positive", Q(value__gt=0)),
+            check("discount_percent_at_most_100", ~Q(kind="percent") | Q(value__lte=100)),
+            check("discount_min_amount_not_negative", Q(min_amount__gte=0)),
+            check("discount_dates_in_order",
+                  Q(start_date__isnull=True) | Q(end_date__isnull=True) | Q(end_date__gte=F("start_date"))),
+            check("discount_usage_within_limit", Q(usage_limit__isnull=True) | Q(used_count__lte=F("usage_limit"))),
+        ]
 
     def __str__(self):
         return self.name
@@ -195,6 +223,9 @@ class SubscriptionLine(models.Model):
     unit_price = models.DecimalField(max_digits=14, decimal_places=2)
     tax_group = models.ForeignKey(TaxGroup, null=True, blank=True, on_delete=models.SET_NULL)
 
+    class Meta:
+        constraints = [check("subscription_line_valid", Q(quantity__gte=1, unit_price__gte=0))]
+
     @property
     def subtotal(self) -> Decimal:
         return self.unit_price * self.quantity
@@ -245,6 +276,14 @@ class Invoice(models.Model):
         constraints = [
             # The core billing invariant: one invoice per subscription per period.
             models.UniqueConstraint(fields=["subscription", "period_start"], name="uniq_invoice_subscription_period"),
+            check("invoice_amounts_not_negative",
+                  Q(subtotal__gte=0, discount_total__gte=0, tax_total__gte=0, total__gte=0, amount_paid__gte=0)),
+            check("invoice_paid_within_total", Q(amount_paid__lte=F("total"))),
+            check("invoice_discount_within_subtotal", Q(discount_total__lte=F("subtotal"))),
+            check("invoice_total_adds_up", Q(total=F("subtotal") - F("discount_total") + F("tax_total"))),
+            check("invoice_period_in_order", Q(period_end__gte=F("period_start"))),
+            check("invoice_due_after_issue", Q(due_date__gte=F("invoice_date"))),
+            check("invoice_paid_means_settled", ~Q(status="paid") | Q(amount_paid=F("total"))),
         ]
         indexes = [models.Index(fields=["status", "due_date"]), models.Index(fields=["customer", "status"])]
 
@@ -271,6 +310,14 @@ class InvoiceLine(models.Model):
     tax_amount = models.DecimalField(**MONEY)
     total = models.DecimalField(**MONEY)
 
+    class Meta:
+        constraints = [
+            check("invoice_line_amounts_valid",
+                  Q(quantity__gte=1, unit_price__gte=0, subtotal__gte=0, discount_amount__gte=0, tax_amount__gte=0)),
+            check("invoice_line_discount_within_subtotal", Q(discount_amount__lte=F("subtotal"))),
+            check("invoice_line_total_adds_up", Q(total=F("subtotal") - F("discount_amount") + F("tax_amount"))),
+        ]
+
 
 class Payment(models.Model):
     class Method(models.TextChoices):
@@ -290,6 +337,7 @@ class Payment(models.Model):
 
     class Meta:
         ordering = ["-date", "-id"]
+        constraints = [check("payment_amount_positive", Q(amount__gt=0))]
 
 
 class BillingRun(models.Model):
@@ -301,6 +349,20 @@ class BillingRun(models.Model):
     items = models.JSONField(default=list)
     started_at = models.DateTimeField(auto_now_add=True)
     finished_at = models.DateTimeField(null=True, blank=True)
+    triggered_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
+
+    class Meta:
+        ordering = ["-id"]
+
+
+class IntegrityCheck(models.Model):
+    """One reconciliation run (see core/integrity.py)."""
+
+    started_at = models.DateTimeField()
+    finished_at = models.DateTimeField()
+    issue_count = models.PositiveIntegerField(default=0)
+    issues = models.JSONField(default=list)
+    counts = models.JSONField(default=dict)
     triggered_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
 
     class Meta:

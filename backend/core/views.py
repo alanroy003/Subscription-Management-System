@@ -15,6 +15,7 @@ from .models import (
     BillingRun,
     Customer,
     Discount,
+    IntegrityCheck,
     Invoice,
     Payment,
     Plan,
@@ -25,11 +26,12 @@ from .models import (
     TaxGroup,
 )
 from .money import ZERO
-from .permissions import IsTeam, TeamReadAdminWrite
+from .permissions import IsAdmin, IsTeam, TeamReadAdminWrite
 from .serializers import (
     BillingRunSerializer,
     CustomerSerializer,
     DiscountSerializer,
+    IntegrityCheckSerializer,
     InvoiceListSerializer,
     InvoiceSerializer,
     PaymentSerializer,
@@ -291,3 +293,17 @@ def report_summary(request):
     d_from = date.fromisoformat(p["date_from"]) if p.get("date_from") else None
     d_to = date.fromisoformat(p["date_to"]) if p.get("date_to") else None
     return Response(reports.summary(d_from, d_to))
+
+
+class IntegrityCheckViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
+    """Reconciliation runs: the team can read them, the admin can start one."""
+
+    queryset = IntegrityCheck.objects.all()
+    serializer_class = IntegrityCheckSerializer
+    permission_classes = [IsTeam]
+
+    @action(detail=False, methods=["post"], permission_classes=[IsAdmin])
+    def run(self, request):
+        from .integrity import run_check
+
+        return Response(IntegrityCheckSerializer(run_check(notify=False, user=request.user)).data)

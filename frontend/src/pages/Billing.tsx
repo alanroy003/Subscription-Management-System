@@ -6,6 +6,7 @@ import { Button, Card, ConfirmDialog, EmptyState, ErrorBanner, Field, Input, Pag
 import { date, dateTime, money, num, todayISO } from '../format'
 import { useList } from '../hooks'
 import type { BillingItem, BillingRun } from '../types'
+import { IntegrityCard } from './IntegrityCard'
 
 export function BillingPage() {
   const toast = useToast()
@@ -115,6 +116,9 @@ export function BillingPage() {
           />
         </Card>
       )}
+
+      <div style={{ height: 16 }} />
+      <IntegrityCard />
 
       <div style={{ height: 16 }} />
       <ErrorBanner error={history.error} onRetry={history.reload} />

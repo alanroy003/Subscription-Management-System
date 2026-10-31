@@ -7,6 +7,9 @@
 - Step 2: ruff + oxlint (`dev.py lint`), `dev.py down`, `dev.py test --pg` (throwaway Postgres container); CI jobs for lint
   and Postgres; concurrency tests (parallel billing runs, discount usage limit 1, gap-free numbering).
 - Fix: parallel database helpers now run in-line inside an open transaction (workers could not see uncommitted rows).
+- Database integrity: CHECK constraints for money rules; Postgres triggers make issued invoices, their lines and payments
+  immutable (status only moves forward); nightly reconciliation (`manage.py reconcile`) with admin email alerts, an
+  integrity API and a Data integrity card on the Billing page; database rule violations return 400 instead of 500.
 
 ## v1.0.0-mvp (2026-10-31)
 - Auth: sign-up with server-side password policy, unique email, login/logout, reset link by email, roles Admin / Staff / Customer, admin-only staff creation.

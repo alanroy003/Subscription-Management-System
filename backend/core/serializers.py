@@ -5,6 +5,7 @@ from .models import (
     BillingRun,
     Customer,
     Discount,
+    IntegrityCheck,
     Invoice,
     InvoiceLine,
     Payment,
@@ -123,6 +124,10 @@ class DiscountSerializer(serializers.ModelSerializer):
         end = attrs.get("end_date", getattr(self.instance, "end_date", None))
         if start and end and end < start:
             raise serializers.ValidationError({"end_date": "Must be on or after the start date."})
+        limit = attrs.get("usage_limit", getattr(self.instance, "usage_limit", None))
+        used = self.instance.used_count if self.instance else 0
+        if limit is not None and limit < used:
+            raise serializers.ValidationError({"usage_limit": f"Already used {used} times; the limit cannot be lower."})
         return attrs
 
 
@@ -344,3 +349,9 @@ class SubscriptionListSerializer(serializers.ModelSerializer):
     def get_available_actions(self, sub):
         request = self.context.get("request")
         return available_actions(sub, request.user) if request else []
+
+
+class IntegrityCheckSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = IntegrityCheck
+        fields = ["id", "started_at", "finished_at", "issue_count", "issues", "counts"]

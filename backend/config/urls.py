@@ -19,6 +19,7 @@ router.register("subscriptions", views.SubscriptionViewSet, basename="subscripti
 router.register("invoices", views.InvoiceViewSet, basename="invoice")
 router.register("payments", views.PaymentViewSet, basename="payment")
 router.register("billing/runs", views.BillingRunViewSet)
+router.register("integrity/checks", views.IntegrityCheckViewSet)
 
 api = [
     path("health", views.health),

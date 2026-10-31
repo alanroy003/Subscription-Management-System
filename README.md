@@ -55,6 +55,8 @@ python scripts/dev.py perf       # times every main endpoint against the configu
   75,428 invoices, 104,879 invoice lines and 67,437 payments** (`seed --reset --subs 10000`): every endpoint p95 under
   1.6 s, dashboard summary p95 0.8 s (`python scripts/dev.py perf`). Write actions that bill (confirm, billing run) take
   2 to 10 s because every statement crosses the ocean; a Supabase project in `ap-south-1` (Mumbai) would cut that ~5x.
+- The database itself enforces the money rules (CHECK constraints) and freezes issued invoices and payments (triggers);
+  a nightly `python backend/manage.py reconcile` re-adds every total and alerts admins on any mismatch.
 - RLS is enabled on all public tables so the Supabase Data API cannot read business data with the publishable key.
 
 ## Public API
