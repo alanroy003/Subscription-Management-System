@@ -204,6 +204,7 @@ export interface Invoice {
   customer: Id
   customer_name: string
   customer_snapshot: { name: string; email: string; address: string; state: string; gstin: string } | null
+  company?: { name: string; address: string; state: string; gstin: string }
   period_start: string | null
   period_end: string | null
   invoice_date: string

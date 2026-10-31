@@ -100,7 +100,7 @@ export function PortalHomePage() {
                 <div>
                   <div style={{ fontWeight: 600 }}>{s.plan_name}</div>
                   <div className="muted" style={{ fontSize: 'var(--fs-sm)' }}>
-                    {s.lines.map((l) => l.product_name).filter(Boolean).join(', ') || 'No products'}
+                    {s.number} · started {date(s.start_date)}
                   </div>
                 </div>
                 <div>

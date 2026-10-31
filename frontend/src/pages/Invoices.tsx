@@ -533,7 +533,14 @@ export function InvoicePrintPage() {
               <BrandMark />
               <strong style={{ fontSize: '1.125rem' }}>Brightloop</strong>
             </div>
-            <div className="muted">Subscription billing</div>
+            <div className="muted">{i.company?.name ?? 'Subscription billing'}</div>
+            {i.company && (
+              <div className="muted" style={{ fontSize: 'var(--fs-sm)' }}>
+                {i.company.address}
+                <br />
+                GSTIN {i.company.gstin}
+              </div>
+            )}
           </div>
           <div style={{ textAlign: 'right' }}>
             <h1>TAX INVOICE</h1>
