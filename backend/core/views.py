@@ -3,6 +3,7 @@ from datetime import date
 from django.db import connection
 from django.db.models import DecimalField, ExpressionWrapper, F, Prefetch, Sum, Value
 from django.db.models.functions import Coalesce
+from django.shortcuts import get_object_or_404
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.exceptions import PermissionDenied, ValidationError
@@ -155,7 +156,9 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def transition(self, request, pk=None):
-        sub = self.get_object()  # customers only reach their own
+        # Ownership check without the detail prefetches; customers only reach their own subscriptions.
+        sub = get_object_or_404(self.filter_queryset(Subscription.objects.filter(
+            pk=pk, **({} if request.user.is_team else {"customer__user": request.user}))))
         act = request.data.get("action", "")
         _domain(lambda: services.transition(sub, act, request.user, request.data.get("note", "")))
         return Response(self.get_serializer(self.get_queryset().get(pk=sub.pk)).data)

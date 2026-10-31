@@ -24,10 +24,10 @@ def tax_components(base: Decimal, tax_group, customer_state: str, company_state:
         if same_state:
             half = rate / 2
             return [
-                {"name": f"CGST {half.normalize()}%", "rate": str(half), "amount": str(q(base * half / 100))},
-                {"name": f"SGST {half.normalize()}%", "rate": str(half), "amount": str(q(base * half / 100))},
+                {"name": "CGST", "rate": str(half), "amount": str(q(base * half / 100))},
+                {"name": "SGST", "rate": str(half), "amount": str(q(base * half / 100))},
             ]
-        return [{"name": f"IGST {rate.normalize()}%", "rate": str(rate), "amount": str(q(base * rate / 100))}]
+        return [{"name": "IGST", "rate": str(rate), "amount": str(q(base * rate / 100))}]
     return [{"name": tax_group.name, "rate": str(rate), "amount": str(q(base * rate / 100))}]
 
 

@@ -35,7 +35,7 @@ def test_golden_billing_month(golden):
     assert inv1.discount_total == D("880.00")
     assert inv1.tax_total == D("1515.60")
     assert inv1.total == D("9935.60")
-    assert [t["name"] for t in inv1.lines.order_by("id")[0].taxes] == ["CGST 9%", "SGST 9%"]
+    assert [t["name"] for t in inv1.lines.order_by("id")[0].taxes] == ["CGST", "SGST"]
     assert inv1.period_end == date(2026, 2, 14)
     assert inv1.due_date == date(2026, 1, 30)
     assert inv2.total == D("9935.60")
@@ -112,7 +112,7 @@ def test_igst_for_other_state(golden):
     golden["customer"].save()
     services.run_billing(date(2026, 1, 15))
     line = Invoice.objects.get().lines.order_by("id")[0]
-    assert [t["name"] for t in line.taxes] == ["IGST 18%"] and line.tax_amount == D("1425.60")
+    assert [t["name"] for t in line.taxes] == ["IGST"] and line.tax_amount == D("1425.60")
 
 
 def test_confirmed_invoice_cannot_be_reconfirmed_or_cancelled_after_payment(golden):

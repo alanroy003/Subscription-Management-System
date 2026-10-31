@@ -90,7 +90,7 @@ def available_actions(sub: Subscription, user) -> list[str]:
 
 def transition(sub: Subscription, action: str, user, note: str = "") -> Subscription:
     with transaction.atomic():
-        sub = Subscription.objects.select_for_update().select_related("plan").get(pk=sub.pk)
+        sub = Subscription.objects.select_for_update().select_related("plan", "customer").get(pk=sub.pk)
         if action not in available_actions(sub, user):
             raise DomainError(f"Action '{action}' is not allowed while the subscription is {sub.status}.")
         old = sub.status
@@ -123,16 +123,16 @@ def transition(sub: Subscription, action: str, user, note: str = "") -> Subscrip
         elif action == "close":
             sub.status = S.CLOSED
             sub.closed_at = today
-        sub.save()
-        _log(sub, old, user, note)
+        events = [SubscriptionEvent(subscription=sub, from_status=old, to_status=sub.status, user=user, note=note)]
         if action == "confirm" and sub.start_date <= today:
-            old = sub.status
             _activate(sub)
-            sub.save()
-            _log(sub, old, user, "Started automatically")
-    if sub.status == S.ACTIVE and action in ("confirm", "activate", "renew"):
-        bill_subscription(sub.pk, today)  # first invoice is billed in advance on activation
-    return Subscription.objects.get(pk=sub.pk)
+            events.append(SubscriptionEvent(subscription=sub, from_status=S.CONFIRMED, to_status=S.ACTIVE, user=user,
+                                            note="Started automatically"))
+        sub.save()
+        SubscriptionEvent.objects.bulk_create(events)
+        if sub.status == S.ACTIVE and action in ("confirm", "activate", "renew"):
+            bill_subscription(sub.pk, today, locked=sub)  # first invoice is billed in advance on activation
+    return sub
 
 
 def _activate(sub: Subscription) -> None:
@@ -252,11 +252,15 @@ def _claim_discounts(used: list) -> int | None:
     return None
 
 
-def bill_subscription(sub_id: int, as_of: date, catalog: tuple | None = None, assign_numbers: bool = True) -> list[BillItem]:
-    """Bill every due period up to `as_of` (catch-up). Runs in its own transaction (no savepoint when nested)."""
+def bill_subscription(sub_id: int, as_of: date, catalog: tuple | None = None, assign_numbers: bool = True,
+                      locked: Subscription | None = None) -> list[BillItem]:
+    """Bill every due period up to `as_of` (catch-up). Runs in its own transaction (no savepoint when nested).
+
+    `locked` is a subscription the caller already holds with select_for_update in the current transaction.
+    """
     items = []
     with transaction.atomic(savepoint=False):
-        sub = Subscription.objects.select_for_update().select_related("plan", "customer").get(pk=sub_id)
+        sub = locked or Subscription.objects.select_for_update().select_related("plan", "customer").get(pk=sub_id)
         if sub.status == S.CONFIRMED and sub.start_date <= as_of:
             old = sub.status
             _activate(sub)
