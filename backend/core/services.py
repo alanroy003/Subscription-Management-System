@@ -2,7 +2,7 @@
 
 Every state change happens inside a transaction and leaves a SubscriptionEvent where relevant.
 """
-import contextlib
+
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
@@ -16,6 +16,7 @@ from django.utils import timezone
 from .models import (BillingRun, Customer, Discount, Invoice, InvoiceLine, Payment, Sequence, Subscription,
                      SubscriptionEvent)
 from .money import ZERO, next_period_start, q
+from .parallel import map_parallel
 from .pricing import LineInput, price_lines
 
 S = Subscription.Status
@@ -178,13 +179,20 @@ def create_invoice(sub: Subscription, period_start: date) -> Invoice:
         )
         for l in lines
     ]
-    discounts = list(Discount.objects.select_for_update().filter(is_active=True))
-    scopes = {d.id: set(d.products.values_list("id", flat=True)) for d in discounts if d.scope == "products"}
-    priced = price_lines(inputs, discounts, scopes, period_start, customer.state, settings.COMPANY["state"])
+    discounts = list(Discount.objects.filter(is_active=True))
+    scopes: dict[int, set] = {}
+    for d_id, p_id in Discount.products.through.objects.filter(discount__in=discounts).values_list("discount_id", "product_id"):
+        scopes.setdefault(d_id, set()).add(p_id)
+    while True:
+        priced = price_lines(inputs, discounts, scopes, period_start, customer.state, settings.COMPANY["state"])
+        exhausted = _claim_discounts(priced.discounts_used)
+        if exhausted is None:
+            break
+        discounts = [d for d in discounts if d.pk != exhausted]  # lost a race for the last use: price without it
 
     invoice_date = max(period_start, sub.start_date)
     invoice = Invoice.objects.create(
-        number=next_number("INV", invoice_date),
+        number=f"TMP-{sub.pk}-{period_start:%Y%m%d}",
         subscription=sub,
         customer=customer,
         customer_snapshot={"name": customer.name, "email": customer.email, "address": customer.address,
@@ -205,9 +213,29 @@ def create_invoice(sub: Subscription, period_start: date) -> Invoice:
                     discount_amount=p.discount_amount, taxes=p.taxes, tax_amount=p.tax_amount, total=p.total)
         for p in priced.lines
     ])
-    for d in priced.discounts_used:
-        Discount.objects.filter(pk=d.pk).update(used_count=F("used_count") + 1)
+    # Numbered last so the gap-free sequence lock is held as briefly as possible.
+    invoice.number = next_number("INV", invoice_date)
+    invoice.save(update_fields=["number"])
     return invoice
+
+
+def _claim_discounts(used: list) -> int | None:
+    """Count one use of each discount atomically. Returns the id of a discount that ran out, if any."""
+    from django.db.models import Q
+
+    class _Exhausted(Exception):
+        pass
+
+    try:
+        with transaction.atomic():  # savepoint: all claims or none
+            for d in used:
+                claimed = Discount.objects.filter(Q(usage_limit__isnull=True) | Q(used_count__lt=F("usage_limit")),
+                                                  pk=d.pk).update(used_count=F("used_count") + 1)
+                if not claimed:
+                    raise _Exhausted(d.pk)
+    except _Exhausted as exc:
+        return exc.args[0]
+    return None
 
 
 def bill_subscription(sub_id: int, as_of: date) -> list[BillItem]:
@@ -253,24 +281,20 @@ def run_billing(as_of: date | None = None, dry_run: bool = False, user=None) -> 
         .values_list("id", flat=True)
         .order_by("id")
     )
-    items: list[BillItem] = []
 
-    class _Rollback(Exception):
-        pass
+    def one(sub_id: int) -> list[BillItem]:
+        # Each subscription commits on its own (failure isolation); a dry run rolls its own transaction back.
+        try:
+            with transaction.atomic():
+                result = bill_subscription(sub_id, as_of)
+                if dry_run:
+                    transaction.set_rollback(True)
+                return result
+        except Exception as exc:
+            number = Subscription.objects.filter(pk=sub_id).values_list("number", flat=True).first() or str(sub_id)
+            return [BillItem(number, as_of, ZERO, "failed", error=str(exc)[:300])]
 
-    try:
-        # Real runs commit per subscription; a dry run wraps everything in one transaction and rolls it back.
-        with transaction.atomic() if dry_run else contextlib.nullcontext():
-            for sub_id in list(due):
-                try:
-                    items.extend(bill_subscription(sub_id, as_of))
-                except Exception as exc:  # failure isolation
-                    number = Subscription.objects.filter(pk=sub_id).values_list("number", flat=True).first() or str(sub_id)
-                    items.append(BillItem(number, as_of, ZERO, "failed", error=str(exc)[:300]))
-            if dry_run:
-                raise _Rollback
-    except _Rollback:
-        pass
+    items: list[BillItem] = [i for batch in map_parallel(one, list(due)) for i in batch]
 
     run = BillingRun.objects.create(
         run_date=as_of, dry_run=dry_run, triggered_by=user if user and user.is_authenticated else None,

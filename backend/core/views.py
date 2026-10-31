@@ -1,7 +1,8 @@
 from datetime import date
 
 from django.db import connection
-from django.db.models import Prefetch
+from django.db.models import DecimalField, ExpressionWrapper, F, Prefetch, Sum, Value
+from django.db.models.functions import Coalesce
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.exceptions import PermissionDenied, ValidationError
@@ -11,11 +12,11 @@ from rest_framework.response import Response
 from . import reports, services
 from .models import (BillingRun, Customer, Discount, Invoice, Payment, Plan, Product, QuotationTemplate, Subscription,
                      SubscriptionLine, TaxGroup)
-from .money import q
-from .permissions import IsAdmin, IsTeam, TeamReadAdminWrite
+from .money import ZERO
+from .permissions import IsTeam, TeamReadAdminWrite
 from .serializers import (BillingRunSerializer, CustomerSerializer, DiscountSerializer, InvoiceListSerializer,
                           InvoiceSerializer, PaymentSerializer, PlanSerializer, ProductSerializer,
-                          QuotationTemplateSerializer, SubscriptionSerializer, TaxGroupSerializer, build_lines)
+                          QuotationTemplateSerializer, SubscriptionListSerializer, SubscriptionSerializer, TaxGroupSerializer, build_lines)
 from .services import DomainError
 
 
@@ -97,11 +98,20 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
     search_fields = ["number", "customer__name", "plan__name"]
     ordering_fields = ["number", "start_date", "next_invoice_date", "created_at"]
 
+    def get_serializer_class(self):
+        return SubscriptionListSerializer if self.action == "list" else SubscriptionSerializer
+
     def get_queryset(self):
-        qs = Subscription.objects.select_related("customer", "plan").prefetch_related(
-            Prefetch("lines", queryset=SubscriptionLine.objects.select_related("product", "variant")),
-            "events__user",
-        )
+        qs = Subscription.objects.select_related("customer", "plan")
+        if self.action == "list":
+            amount = ExpressionWrapper(F("lines__unit_price") * F("lines__quantity"),
+                                       output_field=DecimalField(max_digits=16, decimal_places=2))
+            qs = qs.annotate(amount=Coalesce(Sum(amount), Value(ZERO), output_field=DecimalField(max_digits=16, decimal_places=2))).order_by("-id")
+        else:
+            qs = qs.prefetch_related(
+                Prefetch("lines", queryset=SubscriptionLine.objects.select_related("product", "variant")),
+                "events__user",
+            )
         user = self.request.user
         if not user.is_team:
             qs = qs.filter(customer__user=user)

@@ -310,3 +310,23 @@ class BillingRunSerializer(serializers.ModelSerializer):
     class Meta:
         model = BillingRun
         fields = ["id", "run_date", "dry_run", "created", "skipped", "failed", "items", "started_at", "finished_at"]
+
+
+class SubscriptionListSerializer(serializers.ModelSerializer):
+    """List rows: no nested lines or events (the amount is a SQL annotation), so a page is two queries."""
+
+    customer_name = serializers.CharField(source="customer.name", read_only=True)
+    plan_name = serializers.CharField(source="plan.name", read_only=True)
+    billing_period = serializers.CharField(source="plan.billing_period", read_only=True)
+    recurring_total = serializers.DecimalField(source="amount", max_digits=16, decimal_places=2, read_only=True)
+    available_actions = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Subscription
+        fields = ["id", "number", "customer", "customer_name", "plan", "plan_name", "billing_period", "status",
+                  "start_date", "expiry_date", "next_invoice_date", "payment_term_days", "quotation_valid_until",
+                  "recurring_total", "available_actions", "created_at"]
+
+    def get_available_actions(self, sub):
+        request = self.context.get("request")
+        return available_actions(sub, request.user) if request else []

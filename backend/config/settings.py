@@ -75,8 +75,9 @@ WSGI_APPLICATION = "config.wsgi.application"
 if TESTING or not os.environ.get("DATABASE_URL"):
     DATABASES = {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": BASE_DIR / "test.sqlite3"}}
 else:
-    DATABASES = {"default": dj_database_url.parse(os.environ["DATABASE_URL"], conn_max_age=60, ssl_require=True)}
-    DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
+    # The pooler is ~200 ms away, so a client-side pool avoids a TLS handshake per request.
+    DATABASES = {"default": dj_database_url.parse(os.environ["DATABASE_URL"], conn_max_age=0, ssl_require=True)}
+    DATABASES["default"].setdefault("OPTIONS", {})["pool"] = {"min_size": 2, "max_size": 10, "timeout": 20}
 
 AUTH_USER_MODEL = "accounts.User"
 AUTH_PASSWORD_VALIDATORS = [{"NAME": "accounts.validators.BrightloopPasswordValidator"}]
