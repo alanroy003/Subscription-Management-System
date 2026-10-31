@@ -1,0 +1,38 @@
+﻿# secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# dependencies and caches
+node_modules/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+coverage/
+
+# build and generated output
+dist/
+build/
+staticfiles/
+media/
+*.log
+*.pdf.tmp
+loadtest-results/
+
+# local data and exports
+*.dump
+*.sql.bak
+seed-exports/
+
+# editor, OS, Claude local settings
+.claude/settings.local.json
+.DS_Store
+Thumbs.db
+
+
+docs\00-inputs
